@@ -27,8 +27,8 @@ function normalizeInputSchema(raw){
  }
  return {title:cleanText(source.title||"Actor Input",160),description:cleanText(source.description,1000),required,properties};
 }
-async function loadActorSchema(actorKey,token){
- const actorId=ACTORS[actorKey]; if(!actorId) throw new Error("未知 Actor");
+async function loadActorSchema(actorKey,token,actorIdOverride){
+ const actorId=actorIdOverride||ACTORS[actorKey]; if(!actorId||!/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/.test(actorId)) throw new Error("Actor ID 格式无效");
  const r=await fetch("https://api.apify.com/v2/actors/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});
  if(!r.ok) throw new Error("读取 Actor Schema 失败（HTTP "+r.status+"）");
  return normalizeInputSchema(await r.json());
@@ -64,11 +64,12 @@ document.querySelectorAll("[data-page]").forEach(x=>x.addEventListener("click",(
 async function loadSources(){try{const r=await fetch("/api/sources");const d=await r.json();document.getElementById("sourcegrid").innerHTML=d.sources.map(s=>'<article class="card"><h3>'+s.name+'</h3><div class="muted">'+s.description+'</div><span class="status '+s.status+'">'+(s.status==="beta"?"测试接入":s.status==="planned"?"规划预留":"可用")+'</span></article>').join("")}catch(e){}}
 
 let currentSchema=null;
+function actorIdForKey(key){try{const s=JSON.parse(localStorage.getItem("seaseek.apify.actors")||"{}");return s[key]|| (key==="ads"?"apidojo/facebook-ads-scraper":"themineworks/facebook-pages-scraper")}catch(e){return key==="ads"?"apidojo/facebook-ads-scraper":"themineworks/facebook-pages-scraper"}}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 async function loadActorSchema(){
  const key=document.getElementById("actorKey")?.value||"ads",state=document.getElementById("schemaState"),form=document.getElementById("schemaForm");
  if(!state||!form)return;state.textContent="正在从 Apify 读取真实 Input Schema…";form.innerHTML="";currentSchema=null;
- try{const r=await fetch("/api/apify/schemas?actor="+encodeURIComponent(key));const d=await r.json();if(!r.ok)throw new Error(d.error||"Schema 读取失败");currentSchema=d.schema;
+ try{const actorId=actorIdForKey(key);const r=await fetch("/api/apify/schemas?actor="+encodeURIComponent(key)+"&actorId="+encodeURIComponent(actorId));const d=await r.json();if(!r.ok)throw new Error(d.error||"Schema 读取失败");currentSchema=d.schema;
  const fields=Object.entries(currentSchema.properties||{});if(!fields.length)throw new Error("Actor 未返回可用 properties，暂不开放任务提交");
  state.textContent="已读取 "+d.actorId+" · "+fields.length+" 个参数字段 · 必填 "+(currentSchema.required||[]).length+" 项";
  form.innerHTML='<h2 style="font-size:18px;font-weight:500;margin:24px 0 8px">Actor 参数</h2><p class="hint">以下字段由 Actor Schema 自动生成；带 * 为必填。提交前仅执行参数校验，不会启动收费采集任务。</p><div id="dynamicFields"></div><div class="row" style="margin-top:20px"><button class="btn" onclick="validateDynamicInput()">校验参数</button><button class="btn secondary" onclick="resetDynamicInput()">重置</button></div><div id="inputResult" class="result"></div>';
@@ -87,7 +88,7 @@ function collectDynamicInput(){
  const input={};document.querySelectorAll("#dynamicFields [data-key]").forEach(el=>{const k=el.dataset.key;if(el.type==="checkbox"){input[k]=el.checked;return}if(el.value==="")return;const p=currentSchema?.properties?.[k];if(p?.type==="number"||p?.type==="integer")input[k]=Number(el.value);else if(p?.type==="array"||p?.type==="object"){try{input[k]=JSON.parse(el.value)}catch{throw new Error(k+" 的 JSON 格式无效")}}else input[k]=el.value});return input
 }
 async function validateDynamicInput(){
- const out=document.getElementById("inputResult");try{const input=collectDynamicInput(),actor=document.getElementById("actorKey").value;out.textContent="正在进行服务端 Schema 校验…";const r=await fetch("/api/apify/validate-input",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({actor,input})});const d=await r.json();if(!r.ok)throw new Error(d.error||"参数校验失败");out.className="result ok";out.textContent="参数校验通过。当前仅完成 Schema 校验，尚未启动 Actor 运行。"}catch(e){out.className="result err";out.textContent=e.message}
+ const out=document.getElementById("inputResult");try{const input=collectDynamicInput(),actor=document.getElementById("actorKey").value;out.textContent="正在进行服务端 Schema 校验…";const r=await fetch("/api/apify/validate-input",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({actor,actorId:actorIdForKey(actor),input})});const d=await r.json();if(!r.ok)throw new Error(d.error||"参数校验失败");out.className="result ok";out.textContent="参数校验通过。当前仅完成 Schema 校验，尚未启动 Actor 运行。"}catch(e){out.className="result err";out.textContent=e.message}
 }
 function resetDynamicInput(){if(currentSchema)loadActorSchema()}
 async function checkSecret(){try{const r=await fetch("/api/apify/status");const d=await r.json();document.getElementById("secretstatus").textContent=d.configured?"后台 Secret 已配置，可供任务执行器调用。":"后台 Secret 尚未配置。当前仅支持临时 API 测试。";document.getElementById("secretstatus").className=d.configured?"result ok":"result"}catch(e){document.getElementById("secretstatus").textContent="无法检查后台配置。"}}
@@ -103,14 +104,14 @@ export default {
 
   if(url.pathname==="/api/apify/schemas" && request.method==="GET"){
    if(!env.APIFY_API_TOKEN) return json({error:"后台 APIFY_API_TOKEN 尚未配置，请先在 Cloudflare Worker Secrets 中添加"},503);
-   const actorKey=url.searchParams.get("actor")||"ads";
-   try{const schema=await loadActorSchema(actorKey,env.APIFY_API_TOKEN);return json({actorId:ACTORS[actorKey],schema})}
+   const actorKey=url.searchParams.get("actor")||"ads"; const actorId=url.searchParams.get("actorId")||ACTORS[actorKey];
+   try{const schema=await loadActorSchema(actorKey,env.APIFY_API_TOKEN,actorId);return json({actorId,schema})}
    catch(e){return json({error:e.message},502)}
   }
   if(url.pathname==="/api/apify/validate-input" && request.method==="POST"){
    if(!env.APIFY_API_TOKEN) return json({error:"后台 APIFY_API_TOKEN 尚未配置"},503);
    let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}
-   try{const schema=await loadActorSchema(body.actor,env.APIFY_API_TOKEN);const error=validateActorInput(schema,body.input);if(error)return json({error},400);return json({ok:true,actorId:ACTORS[body.actor]})}
+   try{const actorId=body.actorId||ACTORS[body.actor];const schema=await loadActorSchema(body.actor,env.APIFY_API_TOKEN,actorId);const error=validateActorInput(schema,body.input);if(error)return json({error},400);return json({ok:true,actorId})}
    catch(e){return json({error:e.message},400)}
   }
   if(url.pathname==="/api/apify/status") return json({configured:Boolean(env.APIFY_API_TOKEN)});
