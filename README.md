@@ -53,3 +53,16 @@ The latest Worker upload/deployment succeeded through the Cloudflare API. The pr
 - Replacing or deleting an existing credential requires unlocking it first. Keep the passphrase safe: it cannot be recovered.
 - Facebook Ads and Pages Actor IDs are saved server-side in the same KV namespace.
 - This is a single-user deployment, not a multi-tenant credential manager. Add Cloudflare Access in front of the Worker if the service is exposed publicly; the encrypted credential itself is not readable from the KV status endpoint.
+
+
+## Facebook collection integration (current)
+
+The Facebook workspace now exposes schema-driven Apify collection runners for:
+- Pages: `topapi/facebook-pages-search-scraper` (existing keyword/location page discovery).
+- Posts, videos/Reels search, events and places: `coregent/facebook-search-scraper` with server-fixed `searchType` values (`posts`, `videos`, `events`, `places`).
+- Public group posts, post comments and URL-based Reels: `pnda/facebook-scraper` with server-fixed modes (`groupPosts`, `comments`, `reels`).
+- Public Meta Ad Library ads: `techbellys/facebook-ads-scraper`.
+
+All non-Page forms are generated from each Actor's live Apify OpenAPI input schema. Actor IDs and mode selectors are fixed server-side. Cookie, password, token, session and credential fields are removed/rejected; SeaSeek does not collect private groups or bypass login walls. Each run is recorded in `APIFY_CONFIG` KV, and successful datasets are archived there with source Actor, collection type, run ID, timestamp and raw output (up to the configured archive cap). The task center and data center read these records.
+
+**Verification boundary:** Worker version 37 is deployed with the `APIFY_CONFIG` binding. Cloudflare accepted the module upload and deployment. The Apify account verification request from the integration environment returned HTTP 403, so live Actor schema retrieval and billable end-to-end runs remain pending a successful Apify API response. Do not mark any Actor as runtime-verified until its live schema and a user-approved sample run have succeeded.
