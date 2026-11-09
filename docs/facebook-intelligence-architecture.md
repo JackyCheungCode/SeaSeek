@@ -51,3 +51,23 @@ SeaSeek 当前按单人工作台设计，不增加组织、成员、角色或多
 - P0 UI：Facebook 市场情报一级入口、独立数据类型 Tab、企业主页现有表单保留、未接入能力明确标注、统一任务/数据中心入口已建立。
 - 仍待完成：持久化任务中心、标准对象表、实体关系、多个 Actor 接入、端到端验收、AI 分析。
 - 不得把 UI 占位入口描述为已具备真实采集能力。
+
+
+## Multi-type collection implementation (2026-11)
+
+The Facebook workspace now has schema-driven runners for the additional public-data types:
+
+| SeaSeek type | Fixed Apify Actor | Fixed mode / search type |
+|---|---|---|
+| Posts | `coregent/facebook-search-scraper` | `searchType=posts` |
+| Videos & Reels discovery | `coregent/facebook-search-scraper` | `searchType=videos` |
+| Public Group posts | `pnda/facebook-scraper` | `mode=groupPosts` |
+| Public post comments | `pnda/facebook-scraper` | `mode=comments` |
+| URL-based public Reels | `pnda/facebook-scraper` | `mode=reels` |
+| Events | `coregent/facebook-search-scraper` | `searchType=events` |
+| Places | `coregent/facebook-search-scraper` | `searchType=places` |
+| Public ads | `techbellys/facebook-ads-scraper` | Meta Ad Library URLs / queries per live schema |
+
+The server discovers each Actor's live OpenAPI schema, generates the form from that schema, validates inputs again before execution, and injects fixed modes/search types. The task center records run metadata in `APIFY_CONFIG`; successful datasets are archived with their raw payload and source metadata. Cookie/session/password/token-like input fields are filtered and rejected. Only public or user-authorized data is in scope.
+
+**Runtime verification status:** code uploaded and deployed as Worker version 37, 100% traffic, with the existing `APIFY_CONFIG` KV binding preserved. The integration environment received HTTP 403 from Apify's account verification endpoint, so live schemas and sample runs are not yet certified. The UI must show an explicit schema/connection error rather than imply success until Apify returns a valid response. Billable runs require an explicit user click.
