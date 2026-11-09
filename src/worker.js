@@ -28,13 +28,13 @@ function normalizeInputSchema(raw){
 }
 function resolveOpenApiSchema(node,components,depth=0){
  if(!node||typeof node!=="object"||depth>12)return null;
- if(node.$ref&&typeof node.$ref==="string"){const key=node.$ref.replace(/^#\\/components\\/schemas\\//,"");return resolveOpenApiSchema(components?.[key],components,depth+1)}
+ if(node.$ref&&typeof node.$ref==="string"){const key=node.$ref.split("/").pop();return resolveOpenApiSchema(components?.[key],components,depth+1)}
  if(node.allOf){const merged={type:"object",properties:{},required:[]};for(const part of node.allOf){const x=resolveOpenApiSchema(part,components,depth+1);if(x){Object.assign(merged.properties,x.properties||{});merged.required.push(...(x.required||[]))}}return merged}
  if(node.type==="object"&&node.properties)return node;
  return null;
 }
 async function loadActorSchema(actorKey,token,actorIdOverride){
- const actorId=actorIdOverride||ACTORS[actorKey]; if(!actorId||!/^[a-zA-Z0-9_-]+\\/[a-zA-Z0-9_-]+$/.test(actorId)) throw new Error("Actor ID 格式无效");
+ const actorId=actorIdOverride||ACTORS[actorKey]; if(!actorId||actorId.split("/").length!==2||actorId.split("/").some(x=>! /^[a-zA-Z0-9_-]+$/.test(x))) throw new Error("Actor ID 格式无效");
  const encoded=actorId.replace("/","~"),headers={Authorization:"Bearer "+token};
  const r=await fetch("https://api.apify.com/v2/actors/"+encoded+"/builds/default/openapi.json",{headers});
  if(!r.ok)throw new Error("读取 Actor OpenAPI Schema 失败（HTTP "+r.status+"）");
