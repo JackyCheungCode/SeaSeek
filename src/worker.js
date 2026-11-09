@@ -9,7 +9,7 @@ const SOURCES = [
   {id:"business_directories",name:"Business Directories",group:"商业目录",status:"planned",description:"预留：公开商业目录"}
 ];
 
-const ACTORS = { ads:"apify/facebook-ads-scraper", pages:"apify/facebook-pages-scraper" };
+const ACTORS = { ads:"apidojo/facebook-ads-scraper", pages:"themineworks/facebook-pages-scraper" };
 function cleanText(v,max=500){return typeof v==="string"?v.slice(0,max):""}
 function normalizeInputSchema(raw){
  const source=raw&&typeof raw==="object"?raw:{};
@@ -29,7 +29,7 @@ function normalizeInputSchema(raw){
 }
 async function loadActorSchema(actorKey,token){
  const actorId=ACTORS[actorKey]; if(!actorId) throw new Error("未知 Actor");
- const r=await fetch("https://api.apify.com/v2/acts/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});
+ const r=await fetch("https://api.apify.com/v2/actors/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});
  if(!r.ok) throw new Error("读取 Actor Schema 失败（HTTP "+r.status+"）");
  return normalizeInputSchema(await r.json());
 }
@@ -56,7 +56,7 @@ const html = String.raw`<!doctype html><html lang="zh-CN"><head><meta charset="u
 <section id="sources" class="page hidden"><div class="eyebrow">CONNECTORS</div><h1 class="heading">数据采集渠道</h1><p class="sub">每个渠道独立维护连接器、参数 Schema、执行器和数据映射。未接入渠道仅作规划展示，不会出现在可提交的任务选项中。</p><div id="sourcegrid" class="grid"></div></section>
 <section id="tasks" class="page hidden"><div class="eyebrow">INGESTION</div><h1 class="heading">采集任务</h1><p class="sub">任务参数直接读取 Apify Actor 的真实 Input Schema。字段、必填项、枚举选项和数值边界均由 Schema 驱动，服务端会再次校验。</p><div class="panel"><h2>选择采集模块</h2><div class="field"><label for="actorKey">数据源 / Actor</label><select id="actorKey" onchange="loadActorSchema()"><option value="ads">Facebook Ads · 广告发现</option><option value="pages">Facebook Pages · 主页补全</option></select><div class="hint">只有已接入且可读取 Schema 的模块可创建任务；规划中的渠道不会开放提交。</div></div><div id="schemaState" class="notice">正在检查后台 APIFY_API_TOKEN…</div><div id="schemaForm"></div></div></section>
 <section id="leads" class="page hidden"><div class="eyebrow">LEAD DATABASE</div><h1 class="heading">企业线索</h1><p class="sub">统一线索模型将关联广告记录、Facebook 主页、企业联系方式及数据来源。</p><div class="notice">数据库基础表与组织级隔离策略已建立。待任务执行器接通后，采集结果将进入企业线索库。</div></section>
-<section id="settings" class="page hidden"><div class="eyebrow">INTEGRATION SETTINGS</div><h1 class="heading">数据源配置</h1><p class="sub">管理第三方 API 连接。当前先配置 Apify，后续渠道按相同连接器规范扩展。</p><div class="panel"><h2>Apify API 配置</h2><p class="muted">使用 Apify API Token 测试账户连接，并检查两个 Actor 的可访问性及输入参数 Schema。</p><div class="field"><label for="token">Apify API Token</label><input id="token" type="password" autocomplete="off" placeholder="粘贴 Apify API Token（仅用于本次测试）"><div class="hint">Token 通过 HTTPS 临时发送到 SeaSeek Worker，仅用于连接测试，不会保存到浏览器、数据库或日志。若要供后台任务长期使用，需要将其设置为 Cloudflare Worker Secret：APIFY_API_TOKEN。</div></div><div class="row"><button id="test" class="btn" onclick="testApify()">测试 API 连接</button><button class="btn secondary" onclick="document.getElementById('token').value=''">清空</button></div><div id="testresult" class="result"></div><div class="notice"><b>安全配置说明</b><br>连接测试成功后，请在 Cloudflare Dashboard → Workers & Pages → seaseek → Settings → Variables and Secrets 中添加 Secret：<code>APIFY_API_TOKEN</code>。不要把 Token 提交到 GitHub。配置后刷新页面，系统会检查后台 Secret 是否可用。</div><div id="secretstatus" class="muted">正在检查后台 Secret 状态…</div></div><div class="panel"><h2>Actor 模块</h2><table class="table"><tr><th>模块</th><th>Actor ID</th><th>用途</th></tr><tr><td>广告发现</td><td>apify/facebook-ads-scraper</td><td>发现广告及广告主</td></tr><tr><td>主页补全</td><td>apify/facebook-pages-scraper</td><td>补充主页公开资料</td></tr></table><p class="hint">任务参数选项必须读取 Actor 的真实 Input Schema；不会硬编码未经验证的字段。</p></div></section>
+<section id="settings" class="page hidden"><div class="eyebrow">INTEGRATION SETTINGS</div><h1 class="heading">数据源配置</h1><p class="sub">管理第三方 API 连接。当前先配置 Apify，后续渠道按相同连接器规范扩展。</p><div class="panel"><h2>Apify API 配置</h2><p class="muted">使用 Apify API Token 测试账户连接，并检查两个 Actor 的可访问性及输入参数 Schema。</p><div class="field"><label for="token">Apify API Token</label><input id="token" type="password" autocomplete="off" placeholder="粘贴 Apify API Token（仅用于本次测试）"><div class="hint">Token 通过 HTTPS 临时发送到 SeaSeek Worker，仅用于连接测试，不会保存到浏览器、数据库或日志。若要供后台任务长期使用，需要将其设置为 Cloudflare Worker Secret：APIFY_API_TOKEN。</div></div><div class="row"><button id="test" class="btn" onclick="testApify()">测试 API 连接</button><button class="btn secondary" onclick="document.getElementById('token').value=''">清空</button></div><div id="testresult" class="result"></div><div class="notice"><b>安全配置说明</b><br>连接测试成功后，请在 Cloudflare Dashboard → Workers & Pages → seaseek → Settings → Variables and Secrets 中添加 Secret：<code>APIFY_API_TOKEN</code>。不要把 Token 提交到 GitHub。配置后刷新页面，系统会检查后台 Secret 是否可用。</div><div id="secretstatus" class="muted">正在检查后台 Secret 状态…</div></div><div class="panel"><h2>Actor 模块</h2><table class="table"><tr><th>模块</th><th>Actor ID</th><th>用途</th></tr><tr><td>广告发现</td><td>apidojo/facebook-ads-scraper</td><td>发现广告及广告主</td></tr><tr><td>主页补全</td><td>themineworks/facebook-pages-scraper</td><td>补充主页公开资料</td></tr></table><p class="hint">任务参数选项必须读取 Actor 的真实 Input Schema；不会硬编码未经验证的字段。</p></div></section>
 </div></main></div><script>
 const names={overview:"全球商业情报",sources:"数据采集渠道",tasks:"采集任务",leads:"企业线索",settings:"数据源配置"};
 function show(id){document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id];if(id==="settings")checkSecret();if(id==="tasks")loadActorSchema()}
@@ -122,8 +122,8 @@ export default {
     const me=await fetch("https://api.apify.com/v2/users/me",{headers:{Authorization:"Bearer "+token}});
     if(!me.ok) return json({error:me.status===401?"Apify Token 无效或已过期":"Apify API 请求失败（HTTP "+me.status+"）"},400);
     const user=await me.json();
-    const actors=await Promise.all(["apify/facebook-ads-scraper","apify/facebook-pages-scraper"].map(async actorId=>{
-      try{const r=await fetch("https://api.apify.com/v2/acts/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});if(!r.ok)return {actorId,schemaAvailable:false,error:"HTTP "+r.status};const schema=await r.json();return {actorId,schemaAvailable:true,fields:Array.isArray(schema)?schema.length:Object.keys(schema.properties||{}).length};}
+    const actors=await Promise.all(["apidojo/facebook-ads-scraper","themineworks/facebook-pages-scraper"].map(async actorId=>{
+      try{const r=await fetch("https://api.apify.com/v2/actors/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});if(!r.ok)return {actorId,schemaAvailable:false,error:"HTTP "+r.status};const schema=await r.json();return {actorId,schemaAvailable:true,fields:Array.isArray(schema)?schema.length:Object.keys(schema.properties||{}).length};}
       catch(e){return {actorId,schemaAvailable:false,error:"网络请求失败"}}
     }));
     return json({ok:true,username:user.data?.username||"Apify user",email:user.data?.email||"",actors});
