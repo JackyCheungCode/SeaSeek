@@ -210,7 +210,8 @@ export default {
   if(url.pathname==="/api/health") return json({ok:true,service:"seaseek",version:"0.1.0",modules:SOURCES.length});
   if(url.pathname==="/api/sources") return json({sources:SOURCES});
 
-  if(url.pathname.startsWith("/api/apify/")){
+  const publicAuthRoutes=new Set(["/api/auth/login","/api/auth/session","/api/auth/logout","/api/health"]);
+  if(url.pathname.startsWith("/api/")&&!publicAuthRoutes.has(url.pathname)){
    const user=await getSessionUser(request);
    if(!user)return json({error:"请先登录 SeaSeek"},401);
   }
