@@ -26,11 +26,27 @@ function normalizeInputSchema(raw){
  }
  return {title:cleanText(source.title||"Actor Input",160),description:cleanText(source.description,1000),required,properties};
 }
+function resolveOpenApiSchema(node,components,depth=0){
+ if(!node||typeof node!=="object"||depth>12)return null;
+ if(node.$ref&&typeof node.$ref==="string"){const key=node.$ref.replace(/^#\\/components\\/schemas\\//,"");return resolveOpenApiSchema(components?.[key],components,depth+1)}
+ if(node.allOf){const merged={type:"object",properties:{},required:[]};for(const part of node.allOf){const x=resolveOpenApiSchema(part,components,depth+1);if(x){Object.assign(merged.properties,x.properties||{});merged.required.push(...(x.required||[]))}}return merged}
+ if(node.type==="object"&&node.properties)return node;
+ return null;
+}
 async function loadActorSchema(actorKey,token,actorIdOverride){
- const actorId=actorIdOverride||ACTORS[actorKey]; if(!actorId||!/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/.test(actorId)) throw new Error("Actor ID 格式无效");
- const r=await fetch("https://api.apify.com/v2/actors/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});
- if(!r.ok) throw new Error("读取 Actor Schema 失败（HTTP "+r.status+"）");
- return normalizeInputSchema(await r.json());
+ const actorId=actorIdOverride||ACTORS[actorKey]; if(!actorId||!/^[a-zA-Z0-9_-]+\\/[a-zA-Z0-9_-]+$/.test(actorId)) throw new Error("Actor ID 格式无效");
+ const encoded=actorId.replace("/","~"),headers={Authorization:"Bearer "+token};
+ const r=await fetch("https://api.apify.com/v2/actors/"+encoded+"/builds/default/openapi.json",{headers});
+ if(!r.ok)throw new Error("读取 Actor OpenAPI Schema 失败（HTTP "+r.status+"）");
+ const spec=await r.json(),components=spec.components?.schemas||{};
+ let schema=null;
+ for(const path of Object.values(spec.paths||{}))for(const operation of Object.values(path||{})){
+  const body=operation?.requestBody?.content?.["application/json"]?.schema;
+  if(body){schema=resolveOpenApiSchema(body,components);if(schema)break}
+ }
+ if(!schema&&spec.components?.schemas){for(const candidate of Object.values(components)){schema=resolveOpenApiSchema(candidate,components);if(schema)break}}
+ if(!schema||!schema.properties)throw new Error("Actor 已找到，但 OpenAPI 未提供可识别的输入字段定义");
+ return normalizeInputSchema(schema);
 }
 function validateActorInput(schema,input){
  if(!input||typeof input!=="object"||Array.isArray(input)) return "输入参数必须是 JSON 对象";
@@ -90,7 +106,7 @@ export default {
   if(url.pathname==="/api/apify/credential" && request.method==="PUT"){let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}const token=String(body.token||"").trim();if(token.length<20||token.length>300)return json({error:"Apify Key 格式不正确"},400);await env.APIFY_CONFIG.put("apify_token",token);return json({ok:true})}
   if(url.pathname==="/api/apify/credential" && request.method==="DELETE"){await env.APIFY_CONFIG.delete("apify_token");return json({ok:true})}
   if(url.pathname==="/api/apify/schemas" && request.method==="GET"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);try{const schema=await loadActorSchema("leads",token);return json({actorId:ACTORS.leads,schema})}catch(e){return json({error:e.message},502)}}
-  if(url.pathname==="/api/apify/test" && request.method==="POST"){let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}const token=String(body.token||"").trim();if(token.length<20||token.length>300)return json({error:"Apify Key 格式不正确"},400);try{const me=await fetch("https://api.apify.com/v2/users/me",{headers:{Authorization:"Bearer "+token}});if(!me.ok)return json({error:me.status===401?"Apify Key 无效或已过期":"Apify API 请求失败（HTTP "+me.status+"）"},400);const actor=await fetch("https://api.apify.com/v2/actors/pnda~facebook-pages-scraper/input-schema",{headers:{Authorization:"Bearer "+token}});if(!actor.ok)return json({error:"Apify Key 有效，但无法读取 Facebook 潜在客户 Actor Schema（HTTP "+actor.status+"）"},400);const user=await me.json();return json({ok:true,username:user.data?.username||"Apify user"})}catch(e){return json({error:"无法连接 Apify API，请稍后重试"},502)}}
+  if(url.pathname==="/api/apify/test" && request.method==="POST"){let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}const token=String(body.token||"").trim();if(token.length<20||token.length>300)return json({error:"Apify Key 格式不正确"},400);try{const me=await fetch("https://api.apify.com/v2/users/me",{headers:{Authorization:"Bearer "+token}});if(!me.ok)return json({error:me.status===401?"Apify Key 无效或已过期":"Apify API 请求失败（HTTP "+me.status+"）"},400);try{await loadActorSchema("leads",token)}catch(e){return json({error:"Apify Key 有效，但读取固定 Actor 输入 Schema 失败："+e.message},400)}const user=await me.json();return json({ok:true,username:user.data?.username||"Apify user"})}catch(e){return json({error:"无法连接 Apify API，请稍后重试"},502)}}
   if(url.pathname==="/api/apify/runs" && request.method==="POST"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}try{const schema=await loadActorSchema("leads",token);const input=body.input||{};const invalid=validateActorInput(schema,input);if(invalid)return json({error:invalid},400);const response=await fetch("https://api.apify.com/v2/acts/pnda~facebook-pages-scraper/runs?waitForFinish=0",{method:"POST",headers:{Authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(input)});const result=await response.json();if(!response.ok)return json({error:result.error?.message||"Apify Actor 启动失败（HTTP "+response.status+"）"},502);return json({ok:true,runId:result.data.id,status:result.data.status})}catch(e){return json({error:e.message||"任务启动失败"},502)}}
   if(url.pathname.startsWith("/api/apify/runs/") && request.method==="GET"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"未配置 Apify Key"},401);const runId=decodeURIComponent(url.pathname.slice("/api/apify/runs/".length));if(!/^[a-zA-Z0-9_-]{5,80}$/.test(runId))return json({error:"Run ID 无效"},400);try{const response=await fetch("https://api.apify.com/v2/actor-runs/"+runId,{headers:{Authorization:"Bearer "+token}});const result=await response.json();if(!response.ok)return json({error:"读取任务状态失败（HTTP "+response.status+"）"},502);const data=result.data||{},status=data.status;let items=[];if(status==="SUCCEEDED"&&data.defaultDatasetId){const rows=await fetch("https://api.apify.com/v2/datasets/"+data.defaultDatasetId+"/items?limit=100&clean=true",{headers:{Authorization:"Bearer "+token}});if(rows.ok)items=await rows.json()}return json({runId,status,itemCount:data.stats?.defaultDatasetItemCount??items.length,items})}catch(e){return json({error:"读取任务状态失败"},502)}}
   if(url.pathname.startsWith("/api/")) return json({error:"API endpoint not found"},404);
