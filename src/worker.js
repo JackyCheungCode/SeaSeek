@@ -8,19 +8,88 @@ const SOURCES = [
   {id:"ecommerce",name:"E-commerce",group:"电商平台",status:"planned",description:"预留：店铺与商品趋势"},
   {id:"business_directories",name:"Business Directories",group:"商业目录",status:"planned",description:"预留：公开商业目录"}
 ];
+
+const ACTORS = { ads:"apify/facebook-ads-scraper", pages:"apify/facebook-pages-scraper" };
+function cleanText(v,max=500){return typeof v==="string"?v.slice(0,max):""}
+function normalizeInputSchema(raw){
+ const source=raw&&typeof raw==="object"?raw:{};
+ const props=source.properties&&typeof source.properties==="object"?source.properties:{};
+ const required=Array.isArray(source.required)?source.required.filter(x=>typeof x==="string"):[];
+ const properties={};
+ for(const [key,p] of Object.entries(props)){
+  if(!p||typeof p!=="object") continue;
+  const type=Array.isArray(p.type)?p.type.find(x=>x!=="null"):p.type;
+  const item={type:["string","number","integer","boolean","array","object"].includes(type)?type:"string",title:cleanText(p.title||key,120),description:cleanText(p.description,1000),format:cleanText(p.format,40)};
+  if(Array.isArray(p.enum)) item.enum=p.enum.slice(0,200);
+  for(const k of ["default","minimum","maximum","minLength","maxLength","minItems","maxItems"]) if(p[k]!==undefined && ["string","number","boolean"].includes(typeof p[k])) item[k]=p[k];
+  if(p.items&&typeof p.items==="object"){item.items={type:["string","number","integer","boolean"].includes(p.items.type)?p.items.type:"string"};if(Array.isArray(p.items.enum))item.items.enum=p.items.enum.slice(0,200);}
+  properties[key]=item;
+ }
+ return {title:cleanText(source.title||"Actor Input",160),description:cleanText(source.description,1000),required,properties};
+}
+async function loadActorSchema(actorKey,token){
+ const actorId=ACTORS[actorKey]; if(!actorId) throw new Error("未知 Actor");
+ const r=await fetch("https://api.apify.com/v2/acts/"+actorId.replace("/","~")+"/input-schema",{headers:{Authorization:"Bearer "+token}});
+ if(!r.ok) throw new Error("读取 Actor Schema 失败（HTTP "+r.status+"）");
+ return normalizeInputSchema(await r.json());
+}
+function validateActorInput(schema,input){
+ if(!input||typeof input!=="object"||Array.isArray(input)) return "输入参数必须是 JSON 对象";
+ const props=schema.properties||{}, required=schema.required||[];
+ for(const k of Object.keys(input)) if(!Object.prototype.hasOwnProperty.call(props,k)) return "不允许的参数："+k;
+ for(const k of required) if(input[k]===undefined||input[k]===null||input[k]==="") return "缺少必填参数："+k;
+ for(const [k,v] of Object.entries(input)){
+  const p=props[k]; if(v===undefined||v===null) continue;
+  if(p.enum&&!p.enum.some(x=>x===v)) return k+" 不在允许的选项范围内";
+  if(p.type==="string"){if(typeof v!=="string")return k+" 必须为文本";if(p.minLength!==undefined&&v.length<p.minLength)return k+" 长度不足";if(p.maxLength!==undefined&&v.length>p.maxLength)return k+" 超出最大长度";if(p.format==="uri"||p.format==="url"){try{new URL(v)}catch{return k+" 必须是有效 URL"}}}
+  if(p.type==="number"||p.type==="integer"){if(typeof v!=="number"||!Number.isFinite(v)||(p.type==="integer"&&!Number.isInteger(v)))return k+" 数值类型不正确";if(p.minimum!==undefined&&v<p.minimum)return k+" 小于最小值";if(p.maximum!==undefined&&v>p.maximum)return k+" 大于最大值"}
+  if(p.type==="boolean"&&typeof v!=="boolean")return k+" 必须为布尔值";
+  if(p.type==="array"&&!Array.isArray(v))return k+" 必须为数组";
+  if(p.type==="object"&&(!v||typeof v!=="object"||Array.isArray(v)))return k+" 必须为对象";
+ }
+ return null;
+}
 const html = String.raw`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SeaSeek · 全球商业情报</title><style>
 :root{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#161616;background:#f4f4f4}*{box-sizing:border-box}body{margin:0}.shell{display:grid;grid-template-columns:250px 1fr;min-height:100vh}.side{background:#161616;color:#f4f4f4;padding:22px 14px}.brand{font-size:22px;font-weight:700;padding:6px 12px 26px}.brand small{display:block;font-size:11px;color:#a8a8a8;font-weight:400;margin-top:5px}.navlabel{font-size:11px;color:#8d8d8d;padding:18px 12px 8px;text-transform:uppercase;letter-spacing:1px}.nav button{display:block;width:100%;text-align:left;border:0;background:transparent;color:#c6c6c6;padding:12px;border-radius:0;cursor:pointer;font-size:14px}.nav button.active,.nav button:hover{background:#393939;color:#fff;border-left:3px solid #0f62fe}.main{min-width:0}.top{height:56px;background:#fff;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:13px}.content{max-width:1200px;margin:0 auto;padding:32px}.eyebrow{font-size:12px;color:#525252;letter-spacing:.04em}.heading{font-size:28px;font-weight:400;margin:8px 0}.sub{color:#525252;font-size:14px;line-height:1.6}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:22px 0}.card{background:#fff;padding:20px;min-height:135px;border:1px solid #e0e0e0}.card h3{font-size:16px;font-weight:600;margin:0 0 9px}.muted{color:#6f6f6f;font-size:13px;line-height:1.55}.status{font-size:11px;padding:4px 7px;background:#e8e8e8;color:#393939;display:inline-block;margin-top:14px}.status.beta{background:#d0e2ff;color:#0043ce}.status.planned{background:#f4f4f4;color:#6f6f6f}.panel{background:#fff;padding:24px;border:1px solid #e0e0e0;margin-top:18px}.panel h2{font-size:18px;font-weight:500;margin:0 0 8px}.field{margin:18px 0}.field label{display:block;font-size:13px;margin-bottom:8px}.field input,.field select{width:100%;max-width:560px;height:42px;border:1px solid #8d8d8d;background:#fff;padding:0 12px;font-size:14px;border-radius:0}.hint{font-size:12px;color:#6f6f6f;margin-top:6px;max-width:650px;line-height:1.5}.btn{background:#0f62fe;color:white;border:0;padding:12px 18px;cursor:pointer;font-size:14px}.btn:disabled{opacity:.5;cursor:wait}.btn.secondary{background:#e8e8e8;color:#161616}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.notice{padding:12px 14px;background:#edf5ff;border-left:3px solid #0f62fe;margin:16px 0;font-size:13px;line-height:1.6}.result{font-size:13px;margin-top:14px;white-space:pre-wrap}.ok{color:#198038}.err{color:#da1e28}.hidden{display:none}.table{width:100%;border-collapse:collapse;background:white;margin-top:16px}.table td,.table th{text-align:left;padding:13px;border-bottom:1px solid #e0e0e0;font-size:13px}.table th{color:#525252;font-weight:500;background:#f4f4f4}@media(max-width:800px){.shell{grid-template-columns:1fr}.side{padding:12px}.brand{padding-bottom:10px}.nav{display:flex;overflow:auto}.navlabel{display:none}.nav button{white-space:nowrap;width:auto}.grid{grid-template-columns:1fr}.content{padding:20px}.top{padding:0 20px}}
 </style></head><body><div class="shell"><aside class="side"><div class="brand">SeaSeek<small>GLOBAL BUSINESS INTELLIGENCE</small></div><div class="navlabel">工作空间</div><nav class="nav"><button class="active" data-page="overview">全球商业情报</button><button data-page="sources">数据采集渠道</button><button data-page="tasks">采集任务</button><button data-page="leads">企业线索</button><button data-page="settings">数据源配置</button></nav><div class="navlabel">系统</div><nav class="nav"><button data-page="settings">API 与连接设置</button></nav></aside><main class="main"><header class="top"><span>SeaSeek / <b id="crumb">全球商业情报</b></span><span>模块化数据平台 · PoC</span></header><div class="content">
 <section id="overview" class="page"><div class="eyebrow">GLOBAL BUSINESS INTELLIGENCE</div><h1 class="heading">全球商业情报</h1><p class="sub">从多渠道发现企业、识别广告主、补全公开商业资料，并沉淀为可管理的企业线索。</p><div class="grid"><article class="card"><h3>数据源模块</h3><div class="muted">渠道独立接入、统一任务接口、统一数据模型。新增渠道无需重构主流程。</div><span class="status beta">模块化架构</span></article><article class="card"><h3>参数白名单</h3><div class="muted">提交参数由数据源 Schema 驱动，使用下拉选项和前后端校验，避免无效参数。</div><span class="status beta">Schema 驱动</span></article><article class="card"><h3>安全配置</h3><div class="muted">API 凭据不写入前端代码或 Git 仓库。先测试连接，再配置运行环境 Secret。</div><span class="status">安全优先</span></article></div><div class="panel"><h2>第一阶段接入路线</h2><p class="sub">先完成 Facebook Ads 广告发现与 Facebook Pages 主页补全；其他渠道已预留独立模块入口。</p><div class="row"><button class="btn" onclick="show('settings')">配置 Apify API</button><button class="btn secondary" onclick="show('sources')">查看全部渠道</button></div></div></section>
 <section id="sources" class="page hidden"><div class="eyebrow">CONNECTORS</div><h1 class="heading">数据采集渠道</h1><p class="sub">每个渠道独立维护连接器、参数 Schema、执行器和数据映射。未接入渠道仅作规划展示，不会出现在可提交的任务选项中。</p><div id="sourcegrid" class="grid"></div></section>
-<section id="tasks" class="page hidden"><div class="eyebrow">INGESTION</div><h1 class="heading">采集任务</h1><p class="sub">任务创建页面正在按数据源输入 Schema 接入。未读取并验证 Actor 参数 Schema 前，不开放参数提交，避免错误调用。</p><div class="notice">当前版本已准备渠道目录与 Apify API 连通性测试。下一步接入任务创建、参数下拉选项、执行状态与结果入库。</div><div class="panel"><h2>可创建的任务类型</h2><table class="table"><tr><th>任务类型</th><th>数据源</th><th>状态</th></tr><tr><td>广告发现</td><td>Facebook Ads Scraper</td><td>等待 Actor Schema 验证</td></tr><tr><td>主页补全</td><td>Facebook Pages Scraper</td><td>等待 Actor Schema 验证</td></tr></table></div></section>
+<section id="tasks" class="page hidden"><div class="eyebrow">INGESTION</div><h1 class="heading">采集任务</h1><p class="sub">任务参数直接读取 Apify Actor 的真实 Input Schema。字段、必填项、枚举选项和数值边界均由 Schema 驱动，服务端会再次校验。</p><div class="panel"><h2>选择采集模块</h2><div class="field"><label for="actorKey">数据源 / Actor</label><select id="actorKey" onchange="loadActorSchema()"><option value="ads">Facebook Ads · 广告发现</option><option value="pages">Facebook Pages · 主页补全</option></select><div class="hint">只有已接入且可读取 Schema 的模块可创建任务；规划中的渠道不会开放提交。</div></div><div id="schemaState" class="notice">正在检查后台 APIFY_API_TOKEN…</div><div id="schemaForm"></div></div></section>
 <section id="leads" class="page hidden"><div class="eyebrow">LEAD DATABASE</div><h1 class="heading">企业线索</h1><p class="sub">统一线索模型将关联广告记录、Facebook 主页、企业联系方式及数据来源。</p><div class="notice">数据库基础表与组织级隔离策略已建立。待任务执行器接通后，采集结果将进入企业线索库。</div></section>
 <section id="settings" class="page hidden"><div class="eyebrow">INTEGRATION SETTINGS</div><h1 class="heading">数据源配置</h1><p class="sub">管理第三方 API 连接。当前先配置 Apify，后续渠道按相同连接器规范扩展。</p><div class="panel"><h2>Apify API 配置</h2><p class="muted">使用 Apify API Token 测试账户连接，并检查两个 Actor 的可访问性及输入参数 Schema。</p><div class="field"><label for="token">Apify API Token</label><input id="token" type="password" autocomplete="off" placeholder="粘贴 Apify API Token（仅用于本次测试）"><div class="hint">Token 通过 HTTPS 临时发送到 SeaSeek Worker，仅用于连接测试，不会保存到浏览器、数据库或日志。若要供后台任务长期使用，需要将其设置为 Cloudflare Worker Secret：APIFY_API_TOKEN。</div></div><div class="row"><button id="test" class="btn" onclick="testApify()">测试 API 连接</button><button class="btn secondary" onclick="document.getElementById('token').value=''">清空</button></div><div id="testresult" class="result"></div><div class="notice"><b>安全配置说明</b><br>连接测试成功后，请在 Cloudflare Dashboard → Workers & Pages → seaseek → Settings → Variables and Secrets 中添加 Secret：<code>APIFY_API_TOKEN</code>。不要把 Token 提交到 GitHub。配置后刷新页面，系统会检查后台 Secret 是否可用。</div><div id="secretstatus" class="muted">正在检查后台 Secret 状态…</div></div><div class="panel"><h2>Actor 模块</h2><table class="table"><tr><th>模块</th><th>Actor ID</th><th>用途</th></tr><tr><td>广告发现</td><td>apify/facebook-ads-scraper</td><td>发现广告及广告主</td></tr><tr><td>主页补全</td><td>apify/facebook-pages-scraper</td><td>补充主页公开资料</td></tr></table><p class="hint">任务参数选项必须读取 Actor 的真实 Input Schema；不会硬编码未经验证的字段。</p></div></section>
 </div></main></div><script>
 const names={overview:"全球商业情报",sources:"数据采集渠道",tasks:"采集任务",leads:"企业线索",settings:"数据源配置"};
-function show(id){document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id];if(id==="settings")checkSecret()}
+function show(id){document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id];if(id==="settings")checkSecret();if(id==="tasks")loadActorSchema()}
 document.querySelectorAll("[data-page]").forEach(x=>x.addEventListener("click",()=>show(x.dataset.page)));
 async function loadSources(){try{const r=await fetch("/api/sources");const d=await r.json();document.getElementById("sourcegrid").innerHTML=d.sources.map(s=>'<article class="card"><h3>'+s.name+'</h3><div class="muted">'+s.description+'</div><span class="status '+s.status+'">'+(s.status==="beta"?"测试接入":s.status==="planned"?"规划预留":"可用")+'</span></article>').join("")}catch(e){}}
+
+let currentSchema=null;
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+async function loadActorSchema(){
+ const key=document.getElementById("actorKey")?.value||"ads",state=document.getElementById("schemaState"),form=document.getElementById("schemaForm");
+ if(!state||!form)return;state.textContent="正在从 Apify 读取真实 Input Schema…";form.innerHTML="";currentSchema=null;
+ try{const r=await fetch("/api/apify/schemas?actor="+encodeURIComponent(key));const d=await r.json();if(!r.ok)throw new Error(d.error||"Schema 读取失败");currentSchema=d.schema;
+ const fields=Object.entries(currentSchema.properties||{});if(!fields.length)throw new Error("Actor 未返回可用 properties，暂不开放任务提交");
+ state.textContent="已读取 "+d.actorId+" · "+fields.length+" 个参数字段 · 必填 "+(currentSchema.required||[]).length+" 项";
+ form.innerHTML='<h2 style="font-size:18px;font-weight:500;margin:24px 0 8px">Actor 参数</h2><p class="hint">以下字段由 Actor Schema 自动生成；带 * 为必填。提交前仅执行参数校验，不会启动收费采集任务。</p><div id="dynamicFields"></div><div class="row" style="margin-top:20px"><button class="btn" onclick="validateDynamicInput()">校验参数</button><button class="btn secondary" onclick="resetDynamicInput()">重置</button></div><div id="inputResult" class="result"></div>';
+ const host=document.getElementById("dynamicFields");
+ host.innerHTML=fields.map(([name,p])=>{const req=(currentSchema.required||[]).includes(name),label=esc(p.title||name),desc=esc(p.description||""),id="param_"+btoa(unescape(encodeURIComponent(name))).replace(/=+/g,"");
+ let control="";
+ if(p.enum){control='<select data-key="'+esc(name)+'" id="'+id+'">'+p.enum.map(v=>'<option value="'+esc(v)+'" '+(v===p.default?'selected':'')+'>'+esc(v)+'</option>').join("")+'</select>'}
+ else if(p.type==="boolean"){control='<input data-key="'+esc(name)+'" id="'+id+'" type="checkbox" '+(p.default===true?'checked':'')+'>'}
+ else if(p.type==="number"||p.type==="integer"){control='<input data-key="'+esc(name)+'" id="'+id+'" type="number" '+(p.type==="integer"?'step="1"':'step="any"')+(p.minimum!==undefined?' min="'+p.minimum+'"':'')+(p.maximum!==undefined?' max="'+p.maximum+'"':'')+(p.default!==undefined?' value="'+esc(p.default)+'"':'')+'>'}
+ else if(p.type==="array"||p.type==="object"){control='<textarea data-key="'+esc(name)+'" id="'+id+'" rows="3" placeholder="'+(p.type==="array"?'JSON 数组':'JSON 对象')+'">'+esc(p.default!==undefined?JSON.stringify(p.default,null,2):"")+'</textarea>'}
+ else{control='<input data-key="'+esc(name)+'" id="'+id+'" type="'+(p.format==="uri"||p.format==="url"?"url":"text")+'" '+(p.default!==undefined?'value="'+esc(p.default)+'"':'')+(p.maxLength!==undefined?' maxlength="'+p.maxLength+'"':'')+'>'}
+ return '<div class="field"><label for="'+id+'">'+label+(req?' *':'')+'</label>'+control+(desc?'<div class="hint">'+desc+'</div>':'')+'</div>'}).join("");
+ }catch(e){state.textContent=e.message;state.className="notice err";form.innerHTML=""}
+}
+function collectDynamicInput(){
+ const input={};document.querySelectorAll("#dynamicFields [data-key]").forEach(el=>{const k=el.dataset.key;if(el.type==="checkbox"){input[k]=el.checked;return}if(el.value==="")return;const p=currentSchema?.properties?.[k];if(p?.type==="number"||p?.type==="integer")input[k]=Number(el.value);else if(p?.type==="array"||p?.type==="object"){try{input[k]=JSON.parse(el.value)}catch{throw new Error(k+" 的 JSON 格式无效")}}else input[k]=el.value});return input
+}
+async function validateDynamicInput(){
+ const out=document.getElementById("inputResult");try{const input=collectDynamicInput(),actor=document.getElementById("actorKey").value;out.textContent="正在进行服务端 Schema 校验…";const r=await fetch("/api/apify/validate-input",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({actor,input})});const d=await r.json();if(!r.ok)throw new Error(d.error||"参数校验失败");out.className="result ok";out.textContent="参数校验通过。当前仅完成 Schema 校验，尚未启动 Actor 运行。"}catch(e){out.className="result err";out.textContent=e.message}
+}
+function resetDynamicInput(){if(currentSchema)loadActorSchema()}
 async function checkSecret(){try{const r=await fetch("/api/apify/status");const d=await r.json();document.getElementById("secretstatus").textContent=d.configured?"后台 Secret 已配置，可供任务执行器调用。":"后台 Secret 尚未配置。当前仅支持临时 API 测试。";document.getElementById("secretstatus").className=d.configured?"result ok":"result"}catch(e){document.getElementById("secretstatus").textContent="无法检查后台配置。"}}
 async function testApify(){const token=document.getElementById("token").value.trim();const out=document.getElementById("testresult");const btn=document.getElementById("test");if(!token){out.textContent="请先输入 Apify API Token。";out.className="result err";return}btn.disabled=true;out.textContent="正在验证 Token、账户信息和 Actor Schema…";out.className="result";try{const r=await fetch("/api/apify/test",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({token})});const d=await r.json();if(!r.ok)throw new Error(d.error||"连接测试失败");out.className="result ok";out.textContent="连接成功："+d.username+"（"+d.email+"）\\nActor 检查：\\n"+d.actors.map(a=>a.actorId+" — "+(a.schemaAvailable?"Input Schema 可读取":"Schema 暂不可读取："+(a.error||"未知原因"))).join("\\n")+"\\nToken 未保存。请按页面说明配置 Worker Secret。"}catch(e){out.className="result err";out.textContent="测试失败："+e.message}finally{btn.disabled=false}}
 loadSources();checkSecret();
@@ -31,6 +100,19 @@ export default {
   const json = (data,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}});
   if(url.pathname==="/api/health") return json({ok:true,service:"seaseek",version:"0.1.0",modules:SOURCES.length});
   if(url.pathname==="/api/sources") return json({sources:SOURCES});
+
+  if(url.pathname==="/api/apify/schemas" && request.method==="GET"){
+   if(!env.APIFY_API_TOKEN) return json({error:"后台 APIFY_API_TOKEN 尚未配置，请先在 Cloudflare Worker Secrets 中添加"},503);
+   const actorKey=url.searchParams.get("actor")||"ads";
+   try{const schema=await loadActorSchema(actorKey,env.APIFY_API_TOKEN);return json({actorId:ACTORS[actorKey],schema})}
+   catch(e){return json({error:e.message},502)}
+  }
+  if(url.pathname==="/api/apify/validate-input" && request.method==="POST"){
+   if(!env.APIFY_API_TOKEN) return json({error:"后台 APIFY_API_TOKEN 尚未配置"},503);
+   let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}
+   try{const schema=await loadActorSchema(body.actor,env.APIFY_API_TOKEN);const error=validateActorInput(schema,body.input);if(error)return json({error},400);return json({ok:true,actorId:ACTORS[body.actor]})}
+   catch(e){return json({error:e.message},400)}
+  }
   if(url.pathname==="/api/apify/status") return json({configured:Boolean(env.APIFY_API_TOKEN)});
   if(url.pathname==="/api/apify/test" && request.method==="POST"){
    let body; try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}
