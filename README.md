@@ -44,3 +44,12 @@ The latest Worker upload/deployment succeeded through the Cloudflare API. The pr
 - Apify connection and Actor selection are centralized in **Apify 设置**.
 - Actor IDs can be edited and saved in the current browser profile; the saved values are used for live schema loading and server-side input validation.
 - The API Token field is used for a transient connection test only. It is deliberately not persisted in browser storage or exposed through an unauthenticated save endpoint. For durable server-side use, configure the Worker Secret `APIFY_API_TOKEN` in Cloudflare Dashboard. A secure in-app credential save requires authenticated user/organization access and is not yet implemented.
+
+
+## Single-user Apify credential vault
+- The Apify settings screen supports testing, saving, unlocking, updating, and deleting the API token.
+- The token is encrypted in the browser with AES-GCM (PBKDF2-SHA-256, 310,000 iterations) before it is stored in the Cloudflare KV namespace bound as `APIFY_CONFIG`.
+- The vault passphrase is never persisted by SeaSeek. After a page reload, enter it to unlock the saved token; the token is held only in page memory while the session remains open.
+- Replacing or deleting an existing credential requires unlocking it first. Keep the passphrase safe: it cannot be recovered.
+- Facebook Ads and Pages Actor IDs are saved server-side in the same KV namespace.
+- This is a single-user deployment, not a multi-tenant credential manager. Add Cloudflare Access in front of the Worker if the service is exposed publicly; the encrypted credential itself is not readable from the KV status endpoint.
