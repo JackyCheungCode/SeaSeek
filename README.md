@@ -25,8 +25,8 @@ Worker: `seaseek`
 The SeaSeek settings page provides an API token input and connection test. Configure a Cloudflare Worker Secret named `APIFY_API_TOKEN` under Worker Settings → Variables and Secrets. Never use a plain-text Worker variable or commit API tokens to Git. The previous plain-text binding was removed during the latest deployment; add a fresh Secret before using live schema loading or server-side validation.
 
 Actor IDs:
-- `apify/facebook-ads-scraper`
-- `apify/facebook-pages-scraper`
+- `apidojo/facebook-ads-scraper`
+- `themineworks/facebook-pages-scraper`
 
 The task page now generates parameter controls from the live Actor Input Schema: enum fields use select controls, booleans use checkboxes, bounded numeric fields use constrained number inputs, and array/object fields use JSON editors. Required fields, type constraints, enum values, and numeric/string bounds are checked again by the Worker. The current task action validates parameters only; it does not start a billable Actor run or persist results.
 
@@ -36,3 +36,11 @@ Organization membership and RLS policies are enabled. Sensitive API credentials 
 
 ## Deployment status
 The latest Worker upload/deployment succeeded through the Cloudflare API. The prior plain-text APIFY_API_TOKEN binding was removed; no Worker Secret is currently configured, so live Schema endpoints will return a configuration error until a new Secret is added. CI/CD, authenticated frontend integration, Actor execution, run polling, and result persistence are not yet configured. The current workspace is a schema-driven configuration and validation foundation, not yet a completed ingestion runner.
+
+
+## Workspace navigation and Apify settings
+- Mobile navigation uses a slide-in sidebar with an overlay.
+- All Facebook collection entry points are grouped under one **Facebook 采集** menu; Ads and Pages are selected inside the collection workspace.
+- Apify connection and Actor selection are centralized in **Apify 设置**.
+- Actor IDs can be edited and saved in the current browser profile; the saved values are used for live schema loading and server-side input validation.
+- The API Token field is used for a transient connection test only. It is deliberately not persisted in browser storage or exposed through an unauthenticated save endpoint. For durable server-side use, configure the Worker Secret `APIFY_API_TOKEN` in Cloudflare Dashboard. A secure in-app credential save requires authenticated user/organization access and is not yet implemented.
