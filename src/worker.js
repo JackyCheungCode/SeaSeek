@@ -52,8 +52,17 @@ function resolveOpenApiSchema(node,components,depth=0){
 async function loadActorSchema(actorKey,token,actorIdOverride){
  const actorId=actorIdOverride||ACTORS[actorKey]; if(!actorId||actorId.split("/").length!==2||actorId.split("/").some(x=>! /^[a-zA-Z0-9_-]+$/.test(x))) throw new Error("Actor ID 格式无效");
  const encoded=actorId.replace("/","~"),headers={Authorization:"Bearer "+token};
- const r=await fetch("https://api.apify.com/v2/actors/"+encoded+"/builds/default/openapi.json",{headers});
- if(!r.ok)throw new Error("读取 Actor OpenAPI Schema 失败（HTTP "+r.status+"）");
+ let r;
+ try{
+  r=await fetch("https://api.apify.com/v2/actors/"+encoded+"/builds/default/openapi.json",{headers,signal:AbortSignal.timeout(12000)});
+ }catch(e){
+  if(e?.name==="TimeoutError"||e?.name==="AbortError")throw new Error("Apify Schema 请求超过 12 秒未响应；请检查 Apify API 可用性或该 Actor 的访问权限");
+  throw new Error("连接 Apify Schema 接口失败："+(e?.message||"网络错误"));
+ }
+ if(!r.ok){
+  const detail=(await r.text().catch(()=>"")).slice(0,300);
+  throw new Error("读取 Actor OpenAPI Schema 失败（HTTP "+r.status+")"+(detail?"："+detail:""));
+ }
  const spec=await r.json(),components=spec.components?.schemas||{};
  let schema=null;
  for(const path of Object.values(spec.paths||{}))for(const operation of Object.values(path||{})){
@@ -178,12 +187,12 @@ function genericFieldHtml(name,p,required){
 async function loadGenericActor(type){
  const panel=activeGenericPanel(type);if(!panel)return;const state=panel.querySelector(".generic-state"),form=panel.querySelector(".generic-form"),button=panel.querySelector(".generic-start");
  state.textContent="正在读取 "+type+" 专用 Actor Schema…";state.className="notice generic-state";form.innerHTML="";button.disabled=true;
- try{const r=await fetch("/api/facebook/schema?type="+encodeURIComponent(type)),d=await r.json();if(!r.ok)throw new Error(d.error||"Actor Schema 读取失败");
+ try{const r=await fetch("/api/facebook/schema?type="+encodeURIComponent(type),{cache:"no-store",signal:AbortSignal.timeout(18000)});let d;try{d=await r.json()}catch{throw new Error("Schema 接口返回了非 JSON 响应（HTTP "+r.status+"）")}if(!r.ok)throw new Error(d.error||"Actor Schema 读取失败（HTTP "+r.status+"）");
   const schema=d.schema;genericSchemas[type]=schema;const forced=new Set(["mode","searchType"]),entries=Object.entries(schema.properties||{}).filter(([k])=>!forced.has(k));
   form.innerHTML=entries.map(([k,p])=>genericFieldHtml(k,p,(schema.required||[]).includes(k))).join("");
   if(!entries.length)throw new Error("该 Actor 没有可配置输入字段");
   state.textContent="已读取真实 Schema："+d.actorId+"。仅开放公开数据字段；认证 Cookie 与密码字段不会展示。";button.disabled=false;
- }catch(e){state.textContent=e.message;state.className="notice err generic-state";button.disabled=true}
+ }catch(e){state.textContent=(e?.name==="TimeoutError"||e?.name==="AbortError")?"读取超时：SeaSeek 在 18 秒内未收到 Schema 响应。请重试；若持续发生，请检查 Apify API/Actor 权限。":(e.message||"Schema 读取失败");state.className="notice err generic-state";button.disabled=true}
 }
 function collectGenericInput(type){
  const panel=activeGenericPanel(type),schema=genericSchemas[type];if(!panel||!schema)throw new Error("请先成功加载采集参数 Schema");const input={};
