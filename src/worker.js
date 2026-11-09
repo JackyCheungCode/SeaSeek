@@ -132,7 +132,7 @@ const nativeFetch=window.fetch.bind(window);
 window.fetch=async function(input,init){
  const response=await nativeFetch(input,init);
  const target=typeof input==="string"?input:(input&&input.url)||"";
- if(response.status===401&&target.startsWith("/api/apify/")){
+ if(response.status===401&&(target.startsWith("/api/apify/")||target.startsWith("/api/facebook/"))){
   currentUser=null;
   const gate=document.getElementById("authGate");
   if(gate){gate.style.display="flex";const out=document.getElementById("loginError");if(out)out.textContent="登录已过期，请重新登录后继续操作。"}
