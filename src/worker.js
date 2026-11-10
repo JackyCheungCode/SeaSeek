@@ -423,7 +423,7 @@ export default {
     const effectivePages=Math.min(pages,Number(props.maxPagesPerQuery?.maximum)||pages);
     const optional={countryCode:country,searchLanguage:language,quickDateRange:dateRange,maxPagesPerQuery:effectivePages};
     for(const [key,value] of Object.entries(optional)){if(value!==""&&props[key])input[key]=value;else if(value!==""&&["countryCode","searchLanguage","quickDateRange","maxPagesPerQuery"].includes(key))return json({error:"当前 Actor Schema 不支持必要参数："+key+"，已阻止启动"},502)}
-    if(props.languageCode&&typeof props.languageCode==="string")input.languageCode=language==="zh-CN"||language==="zh-TW"?language:"en";
+    if(props.languageCode&&typeof props.languageCode==="string")input.languageCode=language;
     if(props.focusOnPaidAds)input.focusOnPaidAds=false;
     if(props.maximumLeadsEnrichmentRecords)input.maximumLeadsEnrichmentRecords=0;
     if(props.websiteContentScraper)input.websiteContentScraper={enable:false};
