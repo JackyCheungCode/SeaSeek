@@ -67,12 +67,14 @@ All non-Page forms are generated from each Actor's live Apify OpenAPI input sche
 
 **Verification boundary:** Worker version 37 is deployed with the `APIFY_CONFIG` binding. Cloudflare accepted the module upload and deployment. The Apify account verification request from the integration environment returned HTTP 403, so live Actor schema retrieval and billable end-to-end runs remain pending a successful Apify API response. Do not mark any Actor as runtime-verified until its live schema and a user-approved sample run have succeeded.
 
-## LinkedIn market intelligence (official API only)
+## LinkedIn-related external market intelligence (fixed Apify Actor)
 
-- A dedicated LinkedIn workspace is available at `/data-collection/linkedin`.
-- The initial workspace separates organization pages, organization posts, advertising intelligence, tasks, and data center views.
-- LinkedIn content access is intentionally limited to official LinkedIn APIs and the OAuth permissions/products approved for the developer application.
-- Organization social reads require approved Community Management API access and appropriate organization roles/permissions (for example `r_organization_social`). Advertising reports require approved Advertising API access and authorized ad accounts (for example `r_ads` and `r_ads_reporting`).
-- No LinkedIn member/profile scraping, global member search, unauthorized third-party scraper, session-cookie collection, login-wall bypass, or fabricated task/data records are supported.
-- **Implementation boundary:** the current deployment provides the navigation and workspace shell only. OAuth app credentials, LinkedIn product approval, authorized API requests, task execution, and data persistence are not yet implemented. Do not mark LinkedIn ingestion as live until those are completed and verified.
-- Official references: [LinkedIn API access](https://www.linkedin.com/help/linkedin/answer/a526048), [Increasing API access](https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access), [Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [LinkedIn prohibited software](https://www.linkedin.com/help/linkedin/answer/a1341387/prohibited-software-and-extensions).
+- A dedicated workspace is available at `/data-collection/linkedin`.
+- The workspace uses one fixed Apify Actor: `apify/google-search-scraper`. Users cannot supply or change the Actor ID.
+- The integration searches third-party public websites for company news, product launches, industry reports, partner announcements, and market trends relevant to LinkedIn-oriented B2B research.
+- Search queries automatically append `-site:linkedin.com -site:lnkd.in`; user-supplied `site:` operators and LinkedIn domains are rejected. Returned dataset items are filtered again before archiving.
+- Actor input schema is fetched live from Apify before the run is enabled. The integration requires a text `queries` field and refuses to run if the live schema differs.
+- Runs are stored under `linkedin_task:` in the existing `APIFY_CONFIG` KV namespace. Successful external search results are archived under `linkedin_data:`, with Actor ID, query, Run ID, collection timestamp, and raw items.
+- The integration does **not** scrape LinkedIn pages, member profiles, posts, comments, private groups, or ad accounts; it does not use LinkedIn cookies or bypass login/access controls. LinkedIn-origin domains are excluded from queries and filtered from returned results.
+- This is Google-indexed third-party public web research about LinkedIn-related topics, not LinkedIn platform data access. Live schema validation and a sample run must succeed before describing it as runtime-verified.
+- Fixed Actor reference: [Apify Google Search Scraper](https://apify.com/apify/google-search-scraper).
