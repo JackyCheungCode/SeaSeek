@@ -176,7 +176,20 @@ const html = String.raw`<!doctype html><html lang="zh-CN"><head><meta charset="u
 <div id="li-tab-tasks" class="fb-tab-panel hidden"><div class="panel"><h2>LinkedIn 相关站外情报任务</h2><div id="liTaskHistory" class="notice">正在加载任务记录…</div></div></div>
 <div id="li-tab-data" class="fb-tab-panel hidden"><div class="panel"><h2>LinkedIn 相关站外情报数据中心</h2><div id="liDataCenter" class="notice">正在加载已归档数据…</div></div></div>
 </section>
-<section id="leads" class="page hidden"><div class="eyebrow">LEAD DATABASE</div><h1 class="heading">企业线索</h1><p class="sub">统一线索模型将关联广告记录、Facebook 主页、企业联系方式及数据来源。</p><div class="notice">数据库基础表与组织级隔离策略已建立。待任务执行器接通后，采集结果将进入企业线索库。</div></section>
+<section id="leads" class="page hidden">
+<div class="eyebrow">FACEBOOK LEADS</div><h1 class="heading">Facebook 潜在客户</h1>
+<p class="sub">只展示 Facebook 企业主页采集形成的潜在客户。导出范围仅限潜在客户记录，不包含广告报表、账户配置或其他模块数据。</p>
+<div class="panel">
+ <div class="row" style="justify-content:space-between"><div><h2>潜在客户列表</h2><div id="leadCount" class="muted">正在读取潜在客户…</div></div><button class="btn secondary" type="button" onclick="loadLeadDatabase()">刷新</button></div>
+ <div class="row" style="margin:14px 0">
+  <input id="leadSearch" type="search" placeholder="搜索企业名称、行业、邮箱、电话或国家" aria-label="搜索潜在客户" oninput="renderLeadDatabase()" style="flex:1;min-width:220px;max-width:520px;min-height:38px;border:1px solid #d8d2da;padding:8px 11px;border-radius:2px">
+  <button class="btn" type="button" onclick="exportLeadWorkbook('all')">导出全部潜在客户</button>
+  <button class="btn secondary" type="button" onclick="exportLeadWorkbook('filtered')">导出筛选结果</button>
+  <button class="btn secondary" type="button" onclick="exportLeadWorkbook('selected')">导出选中客户</button>
+ </div>
+ <div id="leadTableHost" class="muted">暂无数据</div>
+ <div id="leadExportStatus" class="result" role="status"></div>
+</div></section>
 <section id="settings" class="page hidden"><div class="eyebrow">APIFY CONNECTION</div><h1 class="heading">Apify 连接</h1><p class="sub">只需保存一次 Apify API Key。Actor 已由 SeaSeek 选定并固定集成，无需单独配置。</p><div class="panel"><h2>Apify API Key</h2><div class="field"><label for="token">Apify API Key</label><input id="token" type="password" autocomplete="off" placeholder="粘贴 Apify API Key"><div class="hint">Key 只发送到 SeaSeek 服务端保存，不会回传到浏览器或写入 GitHub。</div></div><div class="row"><button id="test" class="btn" onclick="testApify()">测试连接</button><button class="btn" onclick="saveCredential()">保存 Key</button><button class="btn secondary" onclick="deleteCredential()">删除 Key</button></div><div id="testresult" class="result"></div><div id="secretstatus" class="muted">正在检查连接状态…</div></div><div class="panel"><h2>已集成采集 Actor</h2><h3>Facebook Pages Search Scraper · TopAPI</h3><p class="muted">使用 Facebook 原生 Pages 搜索发现企业主页，并按需读取公开 About 与透明度信息；可返回电话、邮箱、网站、地址、粉丝数及广告状态。Actor 固定由 SeaSeek 管理。</p><p><a href="https://apify.com/topapi/facebook-pages-search-scraper" target="_blank" rel="noreferrer">查看 Actor 说明与计费</a></p></div></section>
 </div></main></div><script>
 
@@ -215,7 +228,7 @@ function loadActiveFacebookTab(){
 }
 function switchFbTab(id){const allowed=["overview","pages","posts","videos","groups","events","comments","ads","places","tasks","data"];if(!allowed.includes(id))id="overview";document.querySelectorAll(".fb-tab").forEach(x=>{const active=x.dataset.fbTab===id;x.classList.toggle("active",active);x.setAttribute("aria-selected",active?"true":"false")});document.querySelectorAll(".fb-tab-panel").forEach(x=>x.classList.toggle("hidden",x.id!=="fb-tab-"+id));if(id==="pages"){activeDataType="pages";loadActorSchema()}else if(CLIENT_FACEBOOK_TYPES.includes(id)){activeDataType=id;loadGenericActor(id)}if(id==="tasks"){const host=document.getElementById("fbTaskCenter");if(host&&activeRunId)host.textContent="当前采集任务："+activeRunId+"；切换到对应数据类型可查看运行状态。";if(currentUser)loadFacebookTasks()}if(id==="data"&&currentUser)loadFacebookData()}
 function openMenu(){const sidebar=document.getElementById("sidebar"),scrim=document.getElementById("scrim"),toggle=document.getElementById("menuToggle");if(!sidebar||!scrim)return;sidebar.classList.add("open");scrim.classList.add("show");toggle?.setAttribute("aria-expanded","true")}function closeMenu(){const sidebar=document.getElementById("sidebar"),scrim=document.getElementById("scrim"),toggle=document.getElementById("menuToggle");sidebar?.classList.remove("open");scrim?.classList.remove("show");toggle?.setAttribute("aria-expanded","false")}document.getElementById("menuToggle")?.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();openMenu()});document.getElementById("scrim")?.addEventListener("click",closeMenu);
-function show(id,push=true){closeMenu();document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id]||id;if(push&&routes[id]&&location.pathname!==routes[id])history.pushState({page:id},"",routes[id]);if(id==="settings"&&currentUser)checkSecret();if(id==="facebook"&&currentUser)loadActiveFacebookTab()}let liSchemaReady=false,liActiveRunId=null,liSchemaCache=null;
+function show(id,push=true){closeMenu();document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id]||id;if(push&&routes[id]&&location.pathname!==routes[id])history.pushState({page:id},"",routes[id]);if(id==="settings"&&currentUser)checkSecret();if(id==="facebook"&&currentUser)loadActiveFacebookTab();if(id==="leads"&&currentUser)loadLeadDatabase()}let liSchemaReady=false,liActiveRunId=null,liSchemaCache=null;
 function switchLinkedInTab(id){const allowed=["overview","organizations","posts","ads","tasks","data"];if(!allowed.includes(id))id="overview";document.querySelectorAll("[data-li-tab]").forEach(x=>{const active=x.dataset.liTab===id;x.classList.toggle("active",active);x.setAttribute("aria-selected",active?"true":"false")});document.querySelectorAll("#linkedin .fb-tab-panel").forEach(x=>x.classList.toggle("hidden",x.id!=="li-tab-"+id));if(id==="tasks")loadLinkedInTasks();if(id==="data")loadLinkedInData();if(id==="organizations"||id==="posts")loadLinkedInInsightPanel(id)}
 async function loadLinkedInSchema(){const state=document.getElementById("liSchemaState"),button=document.getElementById("liStartButton");if(!state||!button)return;state.textContent="正在读取固定 Actor 的真实 Schema…";button.disabled=true;liSchemaReady=false;try{const r=await fetch("/api/linkedin/schema",{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Schema 读取失败");if(!d.schema?.properties?.queries)throw new Error("Actor Schema 缺少 queries 字段");liSchemaCache=d.schema;const countryField=d.schema.properties.countryCode,countrySelect=document.getElementById("liCountry");if(countrySelect&&Array.isArray(countryField?.enum)&&countryField.enum.length){const labels={us:"美国",jp:"日本",gb:"英国",de:"德国",fr:"法国",cn:"中国",sg:"新加坡",au:"澳大利亚",in:"印度",ca:"加拿大"};const current=String(countrySelect.value||"").toLowerCase(),def=String(countryField.default||"").toLowerCase();countrySelect.innerHTML=countryField.enum.map(v=>{const code=String(v),label=labels[code.toLowerCase()]||code.toUpperCase();return '<option value="'+esc(code)+'">'+esc(label)+'（'+esc(code)+'）</option>'}).join("");const match=countryField.enum.find(v=>String(v).toLowerCase()===current)||countryField.enum.find(v=>String(v).toLowerCase()===def)||countryField.enum[0];if(match!==undefined)countrySelect.value=String(match)}liSchemaReady=true;button.disabled=false;state.className="notice";state.textContent="固定 Actor 已连接并通过 Schema 检查："+d.actorId+"。国家选项已按 Actor 允许范围同步；搜索页数默认 1 页，额外页数会增加 Apify 用量。"}catch(e){state.className="notice err";state.textContent="Schema 检查失败："+e.message}}
 async function startLinkedInRun(){const query=document.getElementById("liSearchQuery")?.value.trim(),button=document.getElementById("liStartButton"),out=document.getElementById("liRunResult");if(!liSchemaReady){out.textContent="请先检查 Actor Schema";return}if(!query){out.textContent="请先输入搜索主题";return}button.disabled=true;out.className="result";out.textContent="正在启动固定 Google Search Actor…";try{const body={query,countryCode:document.getElementById("liCountry")?.value||"jp",searchLanguage:document.getElementById("liSearchLanguage")?.value||"en",quickDateRange:document.getElementById("liDateRange")?.value||"",maxPagesPerQuery:Number(document.getElementById("liPages")?.value||1)};const r=await fetch("/api/linkedin/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}),d=await r.json();if(!r.ok)throw new Error(d.error||"任务启动失败");liActiveRunId=d.runId;out.className="result ok";out.textContent="任务已启动："+d.runId+"\n固定 Actor："+d.actorId+"\n搜索参数："+body.countryCode+" / "+body.searchLanguage+" / "+(body.quickDateRange||"不限时间")+"\n正在同步任务状态…";pollLinkedInRun(d.runId)}catch(e){out.className="result err";out.textContent=e.message}finally{button.disabled=false}}
@@ -288,6 +301,76 @@ function renderGenericResults(type,items){
  host.className="generic-results";host.innerHTML='<div class="muted">采集记录 '+valid.length+' 条'+(errors?"；异常记录 "+errors+" 条":"")+'。以下为 Actor 实际返回数据。</div><details style="margin-top:10px"><summary>查看原始采集数据 JSON</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:420px;background:#211d24;color:#eee7ef;padding:12px">'+esc(JSON.stringify(items,null,2))+'</pre></details>';
 }
 
+
+
+let leadDatabaseRows=[],leadSelectedIds=new Set();
+function leadValue(x,keys){for(const k of keys){const v=x?.[k];if(v!==undefined&&v!==null&&v!=="")return Array.isArray(v)?v.join(", "):v}return ""}
+function normalizeFacebookLead(item,dataset){
+ const name=leadValue(item,["name","pageName","title","companyName"]);
+ const pageUrl=leadValue(item,["pageUrl","facebookUrl","url","facebookPageUrl"]);
+ const stable=String(pageUrl||item.id||name||JSON.stringify(item));
+ return {id:stable,name,industry:leadValue(item,["category","categories","industry"]),email:leadValue(item,["email","emails"]),phone:leadValue(item,["phone","phones"]),website:leadValue(item,["website","websites"]),address:leadValue(item,["address","location","city"]),country:leadValue(item,["country","countryCode"]),followers:leadValue(item,["followers","followersText","likes"]),verified:leadValue(item,["verified","isVerified"]),rating:leadValue(item,["rating","ratingText","ratingPercent","recommendPercent"]),ratingCount:leadValue(item,["ratingCount","reviewCount"]),pageUrl,collectedAt:dataset.collectedAt||""};
+}
+async function loadLeadDatabase(){
+ const host=document.getElementById("leadTableHost");if(!host)return;host.textContent="正在读取 Facebook 潜在客户…";
+ try{
+  const r=await fetch("/api/facebook/data",{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"潜在客户读取失败");
+  const sets=(d.datasets||[]).filter(x=>x.type==="pages"||x.type==="leads");
+  const seen=new Set(),rows=[];
+  for(const set of sets)for(const item of (set.items||[])){if(isActorErrorItem(item))continue;const row=normalizeFacebookLead(item,set);if(!row.name&&!row.pageUrl)continue;if(seen.has(row.id))continue;seen.add(row.id);rows.push(row)}
+  leadDatabaseRows=rows;leadSelectedIds=new Set([...leadSelectedIds].filter(id=>rows.some(x=>x.id===id)));
+  renderLeadDatabase();
+ }catch(e){host.textContent="潜在客户读取失败："+e.message}
+}
+function filteredLeadRows(){
+ const q=String(document.getElementById("leadSearch")?.value||"").trim().toLowerCase();
+ if(!q)return leadDatabaseRows;
+ return leadDatabaseRows.filter(x=>[x.name,x.industry,x.email,x.phone,x.website,x.address,x.country].some(v=>String(v||"").toLowerCase().includes(q)));
+}
+function renderLeadDatabase(){
+ const host=document.getElementById("leadTableHost");if(!host)return;
+ const rows=filteredLeadRows(),count=document.getElementById("leadCount");
+ if(count)count.textContent="共 "+leadDatabaseRows.length+" 条潜在客户；当前筛选 "+rows.length+" 条；已选 "+leadSelectedIds.size+" 条";
+ if(!rows.length){host.innerHTML='<div class="notice">当前没有潜在客户记录。请先在 Facebook「企业与品牌」中完成一次成功采集。</div>';return}
+ const cols=[["name","企业名称"],["industry","行业"],["email","邮箱"],["phone","电话"],["website","网站"],["address","地址"],["followers","粉丝数"],["verified","已验证"],["pageUrl","Facebook 主页"]];
+ host.innerHTML='<div style="overflow:auto"><table class="table"><thead><tr><th><input type="checkbox" aria-label="选择当前筛选结果" '+(rows.every(x=>leadSelectedIds.has(x.id))?"checked":"")+' onchange="toggleVisibleLeadSelection(this.checked)"></th>'+cols.map(c=>'<th>'+c[1]+'</th>').join("")+'</tr></thead><tbody>'+rows.map(x=>'<tr><td><input type="checkbox" aria-label="选择 '+esc(x.name||"潜在客户")+'" '+(leadSelectedIds.has(x.id)?"checked":"")+' onchange="toggleLeadSelection('+JSON.stringify(x.id)+',this.checked)"></td>'+cols.map(c=>'<td>'+(c[0]==="pageUrl"&&x.pageUrl?'<a target="_blank" rel="noopener noreferrer" href="'+esc(x.pageUrl)+'">打开主页</a>':esc(x[c[0]]||"—"))+'</td>').join("")+'</tr>').join("")+'</tbody></table></div>';
+}
+function toggleLeadSelection(id,checked){if(checked)leadSelectedIds.add(id);else leadSelectedIds.delete(id);renderLeadDatabase()}
+function toggleVisibleLeadSelection(checked){for(const row of filteredLeadRows()){if(checked)leadSelectedIds.add(row.id);else leadSelectedIds.delete(row.id)}renderLeadDatabase()}
+function xmlEscape(value){return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;")}
+function excelColumn(n){let s="";while(n>0){const r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=Math.floor((n-1)/26)}return s}
+function crc32(bytes){let crc=-1;for(const b of bytes){crc^=b;for(let k=0;k<8;k++)crc=(crc>>>1)^((crc&1)?0xedb88320:0)}return (crc^-1)>>>0}
+function zipStored(files){
+ const enc=new TextEncoder(),local=[],central=[];let offset=0;
+ for(const file of files){const name=enc.encode(file.name),data=enc.encode(file.data),crc=crc32(data),lh=new Uint8Array(30+name.length+data.length),lv=new DataView(lh.buffer);
+  lv.setUint32(0,0x04034b50,true);lv.setUint16(4,20,true);lv.setUint16(6,0x0800,true);lv.setUint16(8,0,true);lv.setUint32(14,crc,true);lv.setUint32(18,data.length,true);lv.setUint32(22,data.length,true);lv.setUint16(26,name.length,true);lh.set(name,30);lh.set(data,30+name.length);local.push(lh);
+  const ch=new Uint8Array(46+name.length),cv=new DataView(ch.buffer);cv.setUint32(0,0x02014b50,true);cv.setUint16(4,20,true);cv.setUint16(6,20,true);cv.setUint16(8,0x0800,true);cv.setUint16(10,0,true);cv.setUint32(16,crc,true);cv.setUint32(20,data.length,true);cv.setUint32(24,data.length,true);cv.setUint16(28,name.length,true);cv.setUint32(42,offset,true);ch.set(name,46);central.push(ch);offset+=lh.length;
+ }
+ const centralSize=central.reduce((n,x)=>n+x.length,0),end=new Uint8Array(22),ev=new DataView(end.buffer);ev.setUint32(0,0x06054b50,true);ev.setUint16(8,files.length,true);ev.setUint16(10,files.length,true);ev.setUint32(12,centralSize,true);ev.setUint32(16,offset,true);
+ return new Blob([...local,...central,end],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function buildLeadXlsx(rows){
+ const headers=["企业名称","行业","邮箱","电话","网站","地址","国家/地区","粉丝数","已验证","评分/推荐率","评价数","Facebook主页","采集时间"];
+ const keys=["name","industry","email","phone","website","address","country","followers","verified","rating","ratingCount","pageUrl","collectedAt"];
+ const all=[headers,...rows.map(row=>keys.map(k=>row[k]??""))];
+ const sheetRows=all.map((row,ri)=>'<row r="'+(ri+1)+'">'+row.map((v,ci)=>{const ref=excelColumn(ci+1)+(ri+1);if(typeof v==="number"&&Number.isFinite(v))return '<c r="'+ref+'"><v>'+v+'</v></c>';return '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xmlEscape(v)+'</t></is></c>'}).join("")+'</row>').join("");
+ const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'+sheetRows+'</sheetData></worksheet>';
+ return zipStored([
+  {name:"[Content_Types].xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'},
+  {name:"_rels/.rels",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+  {name:"xl/workbook.xml",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Facebook潜在客户" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+  {name:"xl/_rels/workbook.xml.rels",data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'},
+  {name:"xl/worksheets/sheet1.xml",data:sheet}
+ ]);
+}
+function exportLeadWorkbook(mode){
+ const status=document.getElementById("leadExportStatus");let rows;
+ if(mode==="all")rows=leadDatabaseRows;
+ else if(mode==="filtered")rows=filteredLeadRows();
+ else rows=leadDatabaseRows.filter(x=>leadSelectedIds.has(x.id));
+ if(!rows.length){if(status)status.textContent="没有可导出的潜在客户记录。";return}
+ try{const blob=buildLeadXlsx(rows),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="SeaSeek-Facebook-Leads-"+new Date().toISOString().slice(0,10)+".xlsx";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);if(status)status.className="result ok",status.textContent="已生成 Excel： "+rows.length+" 条潜在客户记录。"}catch(e){if(status)status.className="result err",status.textContent="Excel 生成失败："+e.message}
+}
 
 async function loadFacebookTasks(){
  const host=document.getElementById("fbTaskHistory");if(!host)return;host.textContent="正在加载最近任务…";
@@ -393,7 +476,7 @@ export default {
   if(url.pathname==="/api/apify/credential" && request.method==="DELETE"){await env.APIFY_CONFIG.delete("apify_token");return json({ok:true})}
   if(url.pathname==="/api/apify/schemas" && request.method==="GET"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);try{const schema=await loadActorSchema("leads",token);return json({actorId:ACTORS.leads,schema})}catch(e){return json({error:e.message},502)}}
   if(url.pathname==="/api/apify/test" && request.method==="POST"){let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}const token=String(body.token||"").trim();if(token.length<20||token.length>300)return json({error:"Apify Key 格式不正确"},400);try{const me=await fetch("https://api.apify.com/v2/users/me",{headers:{Authorization:"Bearer "+token}});if(!me.ok)return json({error:me.status===401?"Apify Key 无效或已过期":"Apify API 请求失败（HTTP "+me.status+"）"},400);try{await loadActorSchema("leads",token)}catch(e){return json({error:"Apify Key 有效，但读取固定 Actor 输入 Schema 失败："+e.message},400)}const user=await me.json();return json({ok:true,username:user.data?.username||"Apify user"})}catch(e){return json({error:"无法连接 Apify API，请稍后重试"},502)}}
-  if(url.pathname==="/api/apify/runs" && request.method==="POST"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}try{const schema=await loadActorSchema("leads",token);const input=body.input||{};const invalid=validateActorInput(schema,input);if(invalid)return json({error:invalid},400);const response=await fetch("https://api.apify.com/v2/acts/topapi~facebook-pages-search-scraper/runs?waitForFinish=0",{method:"POST",headers:{Authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(input)});const result=await response.json();if(!response.ok)return json({error:result.error?.message||"Apify Actor 启动失败（HTTP "+response.status+"）"},502);return json({ok:true,runId:result.data.id,status:result.data.status})}catch(e){return json({error:e.message||"任务启动失败"},502)}}
+  if(url.pathname==="/api/apify/runs" && request.method==="POST"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}try{const schema=await loadActorSchema("leads",token);const input=body.input||{};const invalid=validateActorInput(schema,input);if(invalid)return json({error:invalid},400);const response=await fetch("https://api.apify.com/v2/acts/topapi~facebook-pages-search-scraper/runs?waitForFinish=0",{method:"POST",headers:{Authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(input)});const result=await response.json();if(!response.ok)return json({error:result.error?.message||"Apify Actor 启动失败（HTTP "+response.status+"）"},502);const runId=result.data.id;await env.APIFY_CONFIG.put("facebook_task:"+runId,JSON.stringify({runId,type:"pages",actorId:ACTORS.leads,status:result.data.status||"READY",createdAt:new Date().toISOString(),input}));return json({ok:true,runId,status:result.data.status})}catch(e){return json({error:e.message||"任务启动失败"},502)}}
   if(url.pathname==="/api/linkedin/schema" && request.method==="GET"){
    const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);
    try{
