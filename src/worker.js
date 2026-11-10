@@ -420,7 +420,7 @@ export default {
     const input={queries:queryLines.map(q=>q+" -site:linkedin.com -site:lnkd.in").join("\n")};
     const effectivePages=Math.min(pages,Number(props.maxPagesPerQuery?.maximum)||pages);
     const optional={countryCode:country,searchLanguage:language,quickDateRange:dateRange,maxPagesPerQuery:effectivePages};
-    for(const [key,value] of Object.entries(optional)){if(value!==""&&props[key])input[key]=value;else if(value!==""&&["countryCode","searchLanguage","maxPagesPerQuery"].includes(key))return json({error:"当前 Actor Schema 不支持必要参数："+key+"，已阻止启动"},502)}
+    for(const [key,value] of Object.entries(optional)){if(value!==""&&props[key])input[key]=value;else if(value!==""&&["countryCode","searchLanguage","quickDateRange","maxPagesPerQuery"].includes(key))return json({error:"当前 Actor Schema 不支持必要参数："+key+"，已阻止启动"},502)}
     if(props.languageCode&&typeof props.languageCode==="string")input.languageCode=language==="zh-CN"||language==="zh-TW"?language:"en";
     if(props.focusOnPaidAds)input.focusOnPaidAds=false;
     if(props.maximumLeadsEnrichmentRecords)input.maximumLeadsEnrichmentRecords=0;
@@ -459,9 +459,11 @@ export default {
      };
      items=(Array.isArray(raw)?raw:[]).map(clean).filter(Boolean);
     }
+    const countResults=value=>{if(Array.isArray(value))return value.reduce((n,x)=>n+countResults(x),0);if(!value||typeof value!=="object")return 0;const own=(value.title||value.name)&&(value.url||value.link||value.destinationUrl)?1:0;return own+Object.values(value).reduce((n,x)=>n+countResults(x),0)};
+    const resultCount=countResults(items);
     const taskKey="linkedin_task:"+runId,taskRaw=await env.APIFY_CONFIG.get(taskKey);
-    if(taskRaw){try{const task=JSON.parse(taskRaw);task.status=status;task.finishedAt=["SUCCEEDED","FAILED","ABORTED","TIMED-OUT"].includes(status)?new Date().toISOString():task.finishedAt;await env.APIFY_CONFIG.put(taskKey,JSON.stringify(task));if(status==="SUCCEEDED"){const dataKey="linkedin_data:"+runId,exists=await env.APIFY_CONFIG.get(dataKey);if(!exists){const archive={runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,query:task.query,countryCode:task.countryCode,searchLanguage:task.searchLanguage,quickDateRange:task.quickDateRange,maxPagesPerQuery:task.maxPagesPerQuery,collectedAt:new Date().toISOString(),itemCount:items.length,items};const encoded=JSON.stringify(archive);if(encoded.length<4500000)await env.APIFY_CONFIG.put(dataKey,encoded)}}}catch(e){}}
-    return json({runId,status,itemCount:items.length,items})
+    if(taskRaw){try{const task=JSON.parse(taskRaw);task.status=status;task.finishedAt=["SUCCEEDED","FAILED","ABORTED","TIMED-OUT"].includes(status)?new Date().toISOString():task.finishedAt;await env.APIFY_CONFIG.put(taskKey,JSON.stringify(task));if(status==="SUCCEEDED"){const dataKey="linkedin_data:"+runId,exists=await env.APIFY_CONFIG.get(dataKey);if(!exists){const archive={runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,query:task.query,countryCode:task.countryCode,searchLanguage:task.searchLanguage,quickDateRange:task.quickDateRange,maxPagesPerQuery:task.maxPagesPerQuery,collectedAt:new Date().toISOString(),itemCount:resultCount,datasetRowCount:items.length,items};const encoded=JSON.stringify(archive);if(encoded.length<4500000)await env.APIFY_CONFIG.put(dataKey,encoded)}}}catch(e){}}
+    return json({runId,status,itemCount:resultCount,datasetRowCount:items.length,items})
    }catch(e){return json({error:"读取任务状态失败："+(e.message||"未知错误")},502)}
   }
   if(url.pathname==="/api/facebook/schema" && request.method==="GET"){
