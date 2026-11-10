@@ -457,7 +457,7 @@ export default {
      };
      items=(Array.isArray(raw)?raw:[]).map(clean).filter(Boolean);
     }
-    const taskKey="linkedin_task:"+runId",taskRaw=await env.APIFY_CONFIG.get(taskKey);
+    const taskKey="linkedin_task:"+runId,taskRaw=await env.APIFY_CONFIG.get(taskKey);
     if(taskRaw){try{const task=JSON.parse(taskRaw);task.status=status;task.finishedAt=["SUCCEEDED","FAILED","ABORTED","TIMED-OUT"].includes(status)?new Date().toISOString():task.finishedAt;await env.APIFY_CONFIG.put(taskKey,JSON.stringify(task));if(status==="SUCCEEDED"){const dataKey="linkedin_data:"+runId,exists=await env.APIFY_CONFIG.get(dataKey);if(!exists){const archive={runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,query:task.query,countryCode:task.countryCode,searchLanguage:task.searchLanguage,quickDateRange:task.quickDateRange,maxPagesPerQuery:task.maxPagesPerQuery,collectedAt:new Date().toISOString(),itemCount:items.length,items};const encoded=JSON.stringify(archive);if(encoded.length<4500000)await env.APIFY_CONFIG.put(dataKey,encoded)}}}catch(e){}}
     return json({runId,status,itemCount:items.length,items})
    }catch(e){return json({error:"读取任务状态失败："+(e.message||"未知错误")},502)}
