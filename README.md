@@ -66,3 +66,13 @@ The Facebook workspace now exposes schema-driven Apify collection runners for:
 All non-Page forms are generated from each Actor's live Apify OpenAPI input schema. Actor IDs and mode selectors are fixed server-side. Cookie, password, token, session and credential fields are removed/rejected; SeaSeek does not collect private groups or bypass login walls. Each run is recorded in `APIFY_CONFIG` KV, and successful datasets are archived there with source Actor, collection type, run ID, timestamp and raw output (up to the configured archive cap). The task center and data center read these records.
 
 **Verification boundary:** Worker version 37 is deployed with the `APIFY_CONFIG` binding. Cloudflare accepted the module upload and deployment. The Apify account verification request from the integration environment returned HTTP 403, so live Actor schema retrieval and billable end-to-end runs remain pending a successful Apify API response. Do not mark any Actor as runtime-verified until its live schema and a user-approved sample run have succeeded.
+
+## LinkedIn market intelligence (official API only)
+
+- A dedicated LinkedIn workspace is available at `/data-collection/linkedin`.
+- The initial workspace separates organization pages, organization posts, advertising intelligence, tasks, and data center views.
+- LinkedIn content access is intentionally limited to official LinkedIn APIs and the OAuth permissions/products approved for the developer application.
+- Organization social reads require approved Community Management API access and appropriate organization roles/permissions (for example `r_organization_social`). Advertising reports require approved Advertising API access and authorized ad accounts (for example `r_ads` and `r_ads_reporting`).
+- No LinkedIn member/profile scraping, global member search, unauthorized third-party scraper, session-cookie collection, login-wall bypass, or fabricated task/data records are supported.
+- **Implementation boundary:** the current deployment provides the navigation and workspace shell only. OAuth app credentials, LinkedIn product approval, authorized API requests, task execution, and data persistence are not yet implemented. Do not mark LinkedIn ingestion as live until those are completed and verified.
+- Official references: [LinkedIn API access](https://www.linkedin.com/help/linkedin/answer/a526048), [Increasing API access](https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access), [Posts API](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api), [LinkedIn prohibited software](https://www.linkedin.com/help/linkedin/answer/a1341387/prohibited-software-and-extensions).
