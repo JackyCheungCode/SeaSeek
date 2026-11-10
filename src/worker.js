@@ -408,6 +408,7 @@ export default {
    const queryLines=rawQueries.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
    if(!queryLines.length||queryLines.length>10)return json({error:"请提供 1–10 条搜索关键词，每行一条"},400);
    if(queryLines.some(q=>/(?:site:|linkedin\.com|lnkd\.in)/i.test(q)))return json({error:"搜索主题不能包含 site: 或 LinkedIn 域名；系统会自动排除 LinkedIn 与 lnkd.in"},400);
+   if(queryLines.some(q=>q.split(/\s+/).filter(Boolean).length>32))return json({error:"每条搜索关键词最多 32 个词（Google 搜索限制）"},400);
    const country=String(body.countryCode||"jp").toLowerCase(),language=String(body.searchLanguage||"en"),dateRange=String(body.quickDateRange||""),pages=Number(body.maxPagesPerQuery||1);
    if(!/^[a-z]{2}$/.test(country))return json({error:"国家代码无效"},400);
    if(!["en","ja","zh-CN","zh-TW","de","fr","es"].includes(language))return json({error:"暂不支持该搜索结果语言"},400);
@@ -417,8 +418,9 @@ export default {
     const schema=await loadActorSchema("linkedin_research",token,LINKEDIN_RESEARCH_ACTOR),props=schema.properties||{};
     if(!props.queries||props.queries.type!=="string")return json({error:"固定 Actor Schema 不支持 queries 文本字段，已阻止启动"},502);
     const input={queries:queryLines.map(q=>q+" -site:linkedin.com -site:lnkd.in").join("\n")};
-    const optional={countryCode:country,searchLanguage:language,quickDateRange:dateRange,maxPagesPerQuery:pages};
-    for(const [key,value] of Object.entries(optional)){if(value!==""&&props[key])input[key]=value}
+    const effectivePages=Math.min(pages,Number(props.maxPagesPerQuery?.maximum)||pages);
+    const optional={countryCode:country,searchLanguage:language,quickDateRange:dateRange,maxPagesPerQuery:effectivePages};
+    for(const [key,value] of Object.entries(optional)){if(value!==""&&props[key])input[key]=value;else if(value!==""&&["countryCode","searchLanguage","maxPagesPerQuery"].includes(key))return json({error:"当前 Actor Schema 不支持必要参数："+key+"，已阻止启动"},502)}
     if(props.languageCode&&typeof props.languageCode==="string")input.languageCode=language==="zh-CN"||language==="zh-TW"?language:"en";
     if(props.focusOnPaidAds)input.focusOnPaidAds=false;
     if(props.maximumLeadsEnrichmentRecords)input.maximumLeadsEnrichmentRecords=0;
@@ -428,7 +430,7 @@ export default {
     const response=await fetch("https://api.apify.com/v2/acts/"+LINKEDIN_RESEARCH_ACTOR.replace("/","~")+"/runs?waitForFinish=0",{method:"POST",headers:{Authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(input)});
     const result=await response.json();if(!response.ok)return json({error:result.error?.message||"Apify Actor 启动失败（HTTP "+response.status+"）"},502);
     const runId=result.data?.id;if(!runId)return json({error:"Apify 未返回任务 ID"},502);
-    await env.APIFY_CONFIG.put("linkedin_task:"+runId,JSON.stringify({runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,status:result.data.status||"READY",createdAt:new Date().toISOString(),query:queryLines.join("\n"),countryCode:country,searchLanguage:language,quickDateRange:dateRange,maxPagesPerQuery:pages}));
+    await env.APIFY_CONFIG.put("linkedin_task:"+runId,JSON.stringify({runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,status:result.data.status||"READY",createdAt:new Date().toISOString(),query:queryLines.join("\n"),countryCode:country,searchLanguage:language,quickDateRange:dateRange,maxPagesPerQuery:effectivePages}));
     return json({ok:true,runId,status:result.data.status,actorId:LINKEDIN_RESEARCH_ACTOR});
    }catch(e){return json({error:e.message||"任务启动失败"},502)}
   }
