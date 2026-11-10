@@ -7,12 +7,13 @@ const SOURCES = [
   {id:"google_search",name:"Google Search",group:"搜索引擎",status:"planned",description:"预留：公开网页与企业发现"},
   {id:"instagram_ads",name:"Instagram Ads",group:"社交广告",status:"planned",description:"预留：社交广告情报"},
   {id:"tiktok_ads",name:"TikTok Ads",group:"社交广告",status:"planned",description:"预留：短视频广告情报"},
-  {id:"linkedin",name:"LinkedIn 市场情报",group:"专业网络",status:"planned",description:"官方 API 接入：企业主页、授权组织动态与广告账户分析（需 LinkedIn 审批）"},
+  {id:"linkedin",name:"LinkedIn 市场情报",group:"专业网络",status:"beta",description:"固定 Google Search Actor：检索 LinkedIn 相关站外公开商业情报（排除 LinkedIn 域名）",actor:"apify/google-search-scraper"},
   {id:"ecommerce",name:"E-commerce",group:"电商平台",status:"planned",description:"预留：店铺与商品趋势"},
   {id:"business_directories",name:"Business Directories",group:"商业目录",status:"planned",description:"预留：公开商业目录"}
 ];
 
 const ACTORS = { leads:"topapi/facebook-pages-search-scraper" };
+const LINKEDIN_RESEARCH_ACTOR="apify/google-search-scraper";
 const FACEBOOK_ACTORS = {
  posts:{actor:"coregent/facebook-search-scraper",searchType:"posts",label:"帖子"},
  videos:{actor:"coregent/facebook-search-scraper",searchType:"videos",label:"视频与 Reels"},
@@ -135,7 +136,7 @@ const html = String.raw`<!doctype html><html lang="zh-CN"><head><meta charset="u
 <section id="linkedin" class="page hidden">
 <div class="eyebrow">LINKEDIN MARKET INTELLIGENCE</div>
 <h1 class="heading">LinkedIn 市场情报</h1>
-<p class="sub">面向全球 B2B 市场的专业网络情报工作台。以 LinkedIn 官方授权 API 为唯一 LinkedIn 内容接入方式，分析你有权管理的企业主页、组织动态与广告账户。</p>
+<p class="sub">使用固定 Apify Google Search Actor，发现 LinkedIn 相关的站外公开商业情报。只采集 Google 搜索结果中 LinkedIn 以外的网站，不抓取 LinkedIn 平台页面、个人资料、帖子或评论。</p>
 <div class="fb-tabs" role="tablist" aria-label="LinkedIn 情报类型">
 <button class="fb-tab active" role="tab" aria-selected="true" data-li-tab="overview" onclick="switchLinkedInTab('overview')"><span class="fb-tab-icon" aria-hidden="true">⌂</span><span>总览</span></button>
 <button class="fb-tab" role="tab" aria-selected="false" data-li-tab="organizations" onclick="switchLinkedInTab('organizations')"><span class="fb-tab-icon" aria-hidden="true">▣</span><span>企业主页</span></button>
@@ -146,27 +147,28 @@ const html = String.raw`<!doctype html><html lang="zh-CN"><head><meta charset="u
 </div>
 <div id="li-tab-overview" class="fb-tab-panel">
 <div class="grid">
-<article class="card"><h3>企业主页情报</h3><div class="muted">读取你已获授权管理的 LinkedIn 组织资料与主页基础信息。</div><span class="status planned">等待官方 API 授权</span></article>
-<article class="card"><h3>组织动态</h3><div class="muted">分析已授权组织发布的帖子、内容主题与可用互动指标。</div><span class="status planned">等待 Community Management API</span></article>
-<article class="card"><h3>广告情报</h3><div class="muted">读取已授权广告账户的 Campaign、创意元数据与报表指标。</div><span class="status planned">等待 Advertising API</span></article>
+<article class="card"><h3>固定采集 Actor</h3><div class="muted">apify/google-search-scraper</div><span class="status beta">固定 Actor</span></article>
+<article class="card"><h3>站外公开情报</h3><div class="muted">企业新闻、行业报告、产品发布、合作伙伴动态及市场趋势。</div><span class="status beta">Google Search</span></article>
+<article class="card"><h3>数据边界</h3><div class="muted">排除 LinkedIn 与 lnkd.in 域名；不访问登录态或私密内容。</div><span class="status">域名排除</span></article>
 </div>
-<div class="panel"><h2>连接准备</h2>
-<div class="notice">LinkedIn 不提供可任意搜索全站成员与帖子的数据接口。SeaSeek 不会抓取个人资料、绕过登录或使用第三方 LinkedIn 爬虫。当前模块先建立合规入口；只有在你的开发者应用获得对应产品权限并完成 OAuth 授权后，才会开放真实数据读取。</div>
-<ol class="muted" style="padding-left:20px;line-height:1.9"><li>在 LinkedIn Developer Portal 创建应用，并关联你管理的企业主页。</li><li>申请 Community Management API（企业主页与组织动态）和/或 Advertising API（广告账户与报表）。</li><li>获批后配置 OAuth Redirect URL，并完成 SeaSeek 授权连接。</li><li>按获批权限读取数据，任务与数据集分别归档，保留来源和授权范围。</li></ol>
-<div class="row"><a class="btn" href="https://www.linkedin.com/developers/apps" target="_blank" rel="noreferrer" style="text-decoration:none">打开 LinkedIn Developer Portal ↗</a><a class="btn secondary" href="https://learn.microsoft.com/en-us/linkedin/marketing/increasing-access" target="_blank" rel="noreferrer" style="text-decoration:none">查看 API 权限与申请说明 ↗</a></div>
+<div class="panel"><h2>创建 LinkedIn 相关站外情报任务</h2>
+<div class="notice">本模块不是 LinkedIn 平台爬虫。固定使用 apify/google-search-scraper 搜索第三方公开网站；搜索语句会自动追加 -site:linkedin.com -site:lnkd.in，返回结果也会再次过滤这两个域名。Actor 的真实 Schema 必须成功读取后才允许启动任务。</div>
+<div class="field"><label for="liSearchQuery">搜索主题 / 关键词</label><input id="liSearchQuery" maxlength="400" placeholder="例如：wireless earbuds market trends OR product launch"><div class="hint">建议输入行业、品牌、产品、竞品或市场趋势关键词；不要输入个人资料或要求抓取 LinkedIn 帖子。</div></div>
+<div class="row"><button class="btn secondary" type="button" onclick="loadLinkedInSchema()">检查固定 Actor Schema</button><button class="btn" type="button" id="liStartButton" onclick="startLinkedInRun()" disabled>启动采集任务</button></div>
+<div id="liSchemaState" class="notice" style="margin-top:12px">请先检查 Apify 连接与固定 Actor 的真实输入 Schema。</div>
+<div id="liRunResult" class="result" style="margin-top:12px"></div>
 </div>
-<div class="panel"><h2>当前可接入范围</h2><table class="table"><thead><tr><th>能力</th><th>官方产品 / 权限</th><th>说明</th></tr></thead><tbody>
-<tr><td>组织主页与组织信息</td><td>Community Management API</td><td>仅限应用获批且当前成员有组织管理权限的页面</td></tr>
-<tr><td>组织帖子与互动</td><td><code>r_organization_social</code></td><td>仅限获授权管理的组织内容；不支持全站任意帖子搜索</td></tr>
-<tr><td>广告账户与报表</td><td>Advertising API / <code>r_ads</code>、<code>r_ads_reporting</code></td><td>仅限授权广告账户及获批 API 范围</td></tr>
-<tr><td>全站个人资料搜索</td><td>不开放</td><td>不采集、不存储 LinkedIn 个人成员资料</td></tr>
+<div class="panel"><h2>采集范围</h2><table class="table"><thead><tr><th>数据类型</th><th>来源</th><th>处理方式</th></tr></thead><tbody>
+<tr><td>企业新闻与公告</td><td>企业官网、新闻媒体</td><td>搜索结果摘要与外部链接</td></tr>
+<tr><td>行业与产品趋势</td><td>行业媒体、研究机构、品牌官网</td><td>关键词检索与原始结果归档</td></tr>
+<tr><td>LinkedIn 平台内容</td><td>LinkedIn / lnkd.in</td><td>明确排除，不采集</td></tr>
 </tbody></table></div>
 </div>
-<div id="li-tab-organizations" class="fb-tab-panel hidden"><div class="panel"><h2>授权企业主页</h2><div class="notice">尚未连接 LinkedIn 官方 API。完成应用审批与 OAuth 授权后，这里将显示你有权管理的企业主页；不会显示或抓取未经授权的页面。</div></div></div>
-<div id="li-tab-posts" class="fb-tab-panel hidden"><div class="panel"><h2>组织动态</h2><div class="notice">此处将展示已授权组织的公开动态及官方 API 返回的互动指标。需要 Community Management API 与 <code>r_organization_social</code> 权限。</div></div></div>
-<div id="li-tab-ads" class="fb-tab-panel hidden"><div class="panel"><h2>广告情报</h2><div class="notice">此处将展示已授权广告账户的 Campaign 与报表。需要 LinkedIn Advertising API 审批及相应广告账户权限。</div></div></div>
-<div id="li-tab-tasks" class="fb-tab-panel hidden"><div class="panel"><h2>LinkedIn 采集任务</h2><div class="notice">官方 API 连接与权限验证完成后开放任务执行。当前不会创建模拟任务或虚构采集结果。</div></div></div>
-<div id="li-tab-data" class="fb-tab-panel hidden"><div class="panel"><h2>LinkedIn 数据中心</h2><div class="notice">仅归档 LinkedIn 官方 API 在授权范围内返回的数据，并记录组织、广告账户、权限范围与采集时间。当前暂无真实数据集。</div></div></div>
+<div id="li-tab-organizations" class="fb-tab-panel hidden"><div class="panel"><h2>企业与品牌公开情报</h2><div id="liExternalOrganizations" class="notice">任务完成后，将在此呈现站外搜索发现的企业官网、新闻来源与品牌公开资料。</div></div></div></div>
+<div id="li-tab-posts" class="fb-tab-panel hidden"><div class="panel"><h2>站外内容与行业动态</h2><div class="notice">此处展示第三方网站的新闻与公开内容搜索结果，不包含 LinkedIn 平台帖子、评论或个人资料。</div></div></div></div>
+<div id="li-tab-ads" class="fb-tab-panel hidden"><div class="panel"><h2>广告与推广线索</h2><div class="notice">当前固定 Actor 只负责 Google 搜索结果发现，不读取 LinkedIn Campaign、广告账户或广告库数据。广告分析需另行接入获授权的广告数据源。</div></div></div></div>
+<div id="li-tab-tasks" class="fb-tab-panel hidden"><div class="panel"><h2>LinkedIn 相关站外情报任务</h2><div id="liTaskHistory" class="notice">正在加载任务记录…</div></div></div></div>
+<div id="li-tab-data" class="fb-tab-panel hidden"><div class="panel"><h2>LinkedIn 相关站外情报数据中心</h2><div id="liDataCenter" class="notice">正在加载已归档数据…</div></div></div></div>
 </section>
 <section id="leads" class="page hidden"><div class="eyebrow">LEAD DATABASE</div><h1 class="heading">企业线索</h1><p class="sub">统一线索模型将关联广告记录、Facebook 主页、企业联系方式及数据来源。</p><div class="notice">数据库基础表与组织级隔离策略已建立。待任务执行器接通后，采集结果将进入企业线索库。</div></section>
 <section id="settings" class="page hidden"><div class="eyebrow">APIFY CONNECTION</div><h1 class="heading">Apify 连接</h1><p class="sub">只需保存一次 Apify API Key。Actor 已由 SeaSeek 选定并固定集成，无需单独配置。</p><div class="panel"><h2>Apify API Key</h2><div class="field"><label for="token">Apify API Key</label><input id="token" type="password" autocomplete="off" placeholder="粘贴 Apify API Key"><div class="hint">Key 只发送到 SeaSeek 服务端保存，不会回传到浏览器或写入 GitHub。</div></div><div class="row"><button id="test" class="btn" onclick="testApify()">测试连接</button><button class="btn" onclick="saveCredential()">保存 Key</button><button class="btn secondary" onclick="deleteCredential()">删除 Key</button></div><div id="testresult" class="result"></div><div id="secretstatus" class="muted">正在检查连接状态…</div></div><div class="panel"><h2>已集成采集 Actor</h2><h3>Facebook Pages Search Scraper · TopAPI</h3><p class="muted">使用 Facebook 原生 Pages 搜索发现企业主页，并按需读取公开 About 与透明度信息；可返回电话、邮箱、网站、地址、粉丝数及广告状态。Actor 固定由 SeaSeek 管理。</p><p><a href="https://apify.com/topapi/facebook-pages-search-scraper" target="_blank" rel="noreferrer">查看 Actor 说明与计费</a></p></div></section>
@@ -207,7 +209,13 @@ function loadActiveFacebookTab(){
 }
 function switchFbTab(id){const allowed=["overview","pages","posts","videos","groups","events","comments","ads","places","tasks","data"];if(!allowed.includes(id))id="overview";document.querySelectorAll(".fb-tab").forEach(x=>{const active=x.dataset.fbTab===id;x.classList.toggle("active",active);x.setAttribute("aria-selected",active?"true":"false")});document.querySelectorAll(".fb-tab-panel").forEach(x=>x.classList.toggle("hidden",x.id!=="fb-tab-"+id));if(id==="pages"){activeDataType="pages";loadActorSchema()}else if(CLIENT_FACEBOOK_TYPES.includes(id)){activeDataType=id;loadGenericActor(id)}if(id==="tasks"){const host=document.getElementById("fbTaskCenter");if(host&&activeRunId)host.textContent="当前采集任务："+activeRunId+"；切换到对应数据类型可查看运行状态。";if(currentUser)loadFacebookTasks()}if(id==="data"&&currentUser)loadFacebookData()}
 function openMenu(){const sidebar=document.getElementById("sidebar"),scrim=document.getElementById("scrim"),toggle=document.getElementById("menuToggle");if(!sidebar||!scrim)return;sidebar.classList.add("open");scrim.classList.add("show");toggle?.setAttribute("aria-expanded","true")}function closeMenu(){const sidebar=document.getElementById("sidebar"),scrim=document.getElementById("scrim"),toggle=document.getElementById("menuToggle");sidebar?.classList.remove("open");scrim?.classList.remove("show");toggle?.setAttribute("aria-expanded","false")}document.getElementById("menuToggle")?.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();openMenu()});document.getElementById("scrim")?.addEventListener("click",closeMenu);
-function show(id,push=true){closeMenu();document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id]||id;if(push&&routes[id]&&location.pathname!==routes[id])history.pushState({page:id},"",routes[id]);if(id==="settings"&&currentUser)checkSecret();if(id==="facebook"&&currentUser)loadActiveFacebookTab()}function switchLinkedInTab(id){const allowed=["overview","organizations","posts","ads","tasks","data"];if(!allowed.includes(id))id="overview";document.querySelectorAll("[data-li-tab]").forEach(x=>{const active=x.dataset.liTab===id;x.classList.toggle("active",active);x.setAttribute("aria-selected",active?"true":"false")});document.querySelectorAll("#linkedin .fb-tab-panel").forEach(x=>x.classList.toggle("hidden",x.id!=="li-tab-"+id))}function renderRoute(){const raw=location.pathname;const path=raw.length>1&&raw.endsWith("/")?raw.slice(0,-1):raw;show(routePages[path]||"overview",false)}document.querySelectorAll("[data-route]").forEach(x=>x.addEventListener("click",()=>show(x.dataset.page)));window.addEventListener("popstate",renderRoute);
+function show(id,push=true){closeMenu();document.querySelectorAll(".page").forEach(x=>x.classList.toggle("hidden",x.id!==id));document.querySelectorAll("[data-page]").forEach(x=>x.classList.toggle("active",x.dataset.page===id));document.getElementById("crumb").textContent=names[id]||id;if(push&&routes[id]&&location.pathname!==routes[id])history.pushState({page:id},"",routes[id]);if(id==="settings"&&currentUser)checkSecret();if(id==="facebook"&&currentUser)loadActiveFacebookTab()}let liSchemaReady=false,liActiveRunId=null;
+function switchLinkedInTab(id){const allowed=["overview","organizations","posts","ads","tasks","data"];if(!allowed.includes(id))id="overview";document.querySelectorAll("[data-li-tab]").forEach(x=>{const active=x.dataset.liTab===id;x.classList.toggle("active",active);x.setAttribute("aria-selected",active?"true":"false")});document.querySelectorAll("#linkedin .fb-tab-panel").forEach(x=>x.classList.toggle("hidden",x.id!=="li-tab-"+id));if(id==="tasks")loadLinkedInTasks();if(id==="data")loadLinkedInData()}
+async function loadLinkedInSchema(){const state=document.getElementById("liSchemaState"),button=document.getElementById("liStartButton");if(!state||!button)return;state.textContent="正在读取固定 Actor 的真实 Schema…";button.disabled=true;liSchemaReady=false;try{const r=await fetch("/api/linkedin/schema",{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Schema 读取失败");if(!d.schema?.properties?.queries)throw new Error("Actor Schema 缺少 queries 字段");liSchemaReady=true;button.disabled=false;state.textContent="已验证固定 Actor："+d.actorId+"；查询字段：queries。任务会自动排除 LinkedIn 与 lnkd.in 域名。"}catch(e){state.textContent="Schema 检查失败："+e.message;state.className="notice err"}}
+async function startLinkedInRun(){const query=document.getElementById("liSearchQuery")?.value.trim(),button=document.getElementById("liStartButton"),out=document.getElementById("liRunResult");if(!liSchemaReady){out.textContent="请先检查 Actor Schema";return}if(!query){out.textContent="请先输入搜索主题";return}button.disabled=true;out.className="result";out.textContent="正在启动固定 Google Search Actor…";try{const r=await fetch("/api/linkedin/runs",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({query})}),d=await r.json();if(!r.ok)throw new Error(d.error||"任务启动失败");liActiveRunId=d.runId;out.className="result ok";out.textContent="任务已启动："+d.runId+"\n固定 Actor："+d.actorId+"\n正在同步任务状态…";pollLinkedInRun(d.runId)}catch(e){out.className="result err";out.textContent=e.message}finally{button.disabled=false}}
+async function pollLinkedInRun(runId){const out=document.getElementById("liRunResult");for(let n=0;n<30;n++){await new Promise(resolve=>setTimeout(resolve,3000));try{const r=await fetch("/api/linkedin/runs/"+encodeURIComponent(runId),{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"状态读取失败");if(["SUCCEEDED","FAILED","ABORTED","TIMED-OUT"].includes(d.status)){if(out){out.className=d.status==="SUCCEEDED"?"result ok":"result err";out.textContent="任务状态："+d.status+"\n实际结果："+(d.itemCount||0)+" 条\nRun ID："+runId+"\n数据已归档至数据中心。"}loadLinkedInTasks();loadLinkedInData();return}}catch(e){if(out)out.textContent="任务已提交；状态同步暂时失败："+e.message;return}}if(out)out.textContent="任务仍在运行，可在「采集任务」查看最新状态。"}
+async function loadLinkedInTasks(){const host=document.getElementById("liTaskHistory");if(!host)return;host.textContent="正在加载任务记录…";try{const r=await fetch("/api/linkedin/tasks"),d=await r.json();if(!r.ok)throw new Error(d.error||"任务读取失败");const tasks=d.tasks||[];host.innerHTML=tasks.length?'<div class="muted">最近 '+tasks.length+' 个任务</div><div style="overflow:auto"><table class="table"><thead><tr><th>搜索主题</th><th>Actor</th><th>Run ID</th><th>创建时间</th><th>状态</th></tr></thead><tbody>'+tasks.map(t=>'<tr><td>'+esc(t.query||"")+'</td><td>'+esc(t.actorId||"")+'</td><td>'+esc(t.runId||"")+'</td><td>'+esc(t.createdAt||"")+'</td><td>'+esc(t.status||"READY")+'</td></tr>').join("")+'</tbody></table></div>':'暂无任务'}catch(e){host.textContent="任务读取失败："+e.message}}
+async function loadLinkedInData(){const host=document.getElementById("liDataCenter");if(!host)return;host.textContent="正在读取归档数据…";try{const r=await fetch("/api/linkedin/data"),d=await r.json();if(!r.ok)throw new Error(d.error||"数据读取失败");const sets=d.datasets||[];host.innerHTML=sets.length?'<div class="muted">已归档 '+sets.length+' 个数据集</div>'+sets.map(x=>'<details style="margin-top:12px;background:#fff;padding:12px"><summary>'+esc(x.query||"")+' ｜ '+esc(x.collectedAt||"")+' ｜ '+(x.items||[]).length+' 条</summary><pre style="white-space:pre-wrap;overflow:auto;max-height:420px">'+esc(JSON.stringify(x.items||[],null,2))+'</pre></details>').join(""):'暂无真实数据集'}catch(e){host.textContent="数据中心读取失败："+e.message}}function renderRoute(){const raw=location.pathname;const path=raw.length>1&&raw.endsWith("/")?raw.slice(0,-1):raw;show(routePages[path]||"overview",false)}document.querySelectorAll("[data-route]").forEach(x=>x.addEventListener("click",()=>show(x.dataset.page)));window.addEventListener("popstate",renderRoute);
 async function loadSources(){try{const r=await fetch("/api/sources");const d=await r.json();document.getElementById("sourcegrid").innerHTML=d.sources.map(s=>'<article class="card"><h3>'+s.name+'</h3><div class="muted">'+s.description+'</div><span class="status '+s.status+'">'+(s.status==="beta"?"测试接入":s.status==="planned"?"规划预留":"可用")+'</span></article>').join("")}catch(e){}}
 
 let currentSchema=null,lastTestedToken=null,activeRunId=null;
@@ -375,6 +383,47 @@ export default {
   if(url.pathname==="/api/apify/schemas" && request.method==="GET"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);try{const schema=await loadActorSchema("leads",token);return json({actorId:ACTORS.leads,schema})}catch(e){return json({error:e.message},502)}}
   if(url.pathname==="/api/apify/test" && request.method==="POST"){let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}const token=String(body.token||"").trim();if(token.length<20||token.length>300)return json({error:"Apify Key 格式不正确"},400);try{const me=await fetch("https://api.apify.com/v2/users/me",{headers:{Authorization:"Bearer "+token}});if(!me.ok)return json({error:me.status===401?"Apify Key 无效或已过期":"Apify API 请求失败（HTTP "+me.status+"）"},400);try{await loadActorSchema("leads",token)}catch(e){return json({error:"Apify Key 有效，但读取固定 Actor 输入 Schema 失败："+e.message},400)}const user=await me.json();return json({ok:true,username:user.data?.username||"Apify user"})}catch(e){return json({error:"无法连接 Apify API，请稍后重试"},502)}}
   if(url.pathname==="/api/apify/runs" && request.method==="POST"){const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}try{const schema=await loadActorSchema("leads",token);const input=body.input||{};const invalid=validateActorInput(schema,input);if(invalid)return json({error:invalid},400);const response=await fetch("https://api.apify.com/v2/acts/topapi~facebook-pages-search-scraper/runs?waitForFinish=0",{method:"POST",headers:{Authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(input)});const result=await response.json();if(!response.ok)return json({error:result.error?.message||"Apify Actor 启动失败（HTTP "+response.status+"）"},502);return json({ok:true,runId:result.data.id,status:result.data.status})}catch(e){return json({error:e.message||"任务启动失败"},502)}}
+  if(url.pathname==="/api/linkedin/schema" && request.method==="GET"){
+   const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);
+   try{const schema=await loadActorSchema("linkedin_research",token,LINKEDIN_RESEARCH_ACTOR);if(!schema.properties?.queries||schema.properties.queries.type!=="string")return json({error:"固定 Google Search Actor 的 Schema 与预期不符：缺少 queries 文本字段，已阻止启动"},502);return json({actorId:LINKEDIN_RESEARCH_ACTOR,schema:{title:schema.title||"Google Search Scraper",properties:{queries:schema.properties.queries,maxPagesPerQuery:schema.properties.maxPagesPerQuery||null,resultsPerPage:schema.properties.resultsPerPage||null},required:schema.required||[]}})}catch(e){return json({error:"读取固定 Google Search Actor Schema 失败："+e.message},502)}
+  }
+  if(url.pathname==="/api/linkedin/runs" && request.method==="POST"){
+   const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"请先在 Apify 设置中保存 API Key"},401);
+   let body;try{body=await request.json()}catch{return json({error:"请求格式错误"},400)}
+   const query=String(body.query||"").trim();if(query.length<2||query.length>400)return json({error:"请输入 2–400 个字符的搜索主题"},400);
+   if(/(?:site:|linkedin\.com|lnkd\.in)/i.test(query))return json({error:"搜索主题不能指定 LinkedIn 域名；系统会自动排除 LinkedIn 与 lnkd.in"},400);
+   try{
+    const schema=await loadActorSchema("linkedin_research",token,LINKEDIN_RESEARCH_ACTOR),props=schema.properties||{};
+    if(!props.queries||props.queries.type!=="string")return json({error:"固定 Actor Schema 不支持 queries 文本字段，已阻止启动"},502);
+    const input={queries:query+" -site:linkedin.com -site:lnkd.in"};
+    if(props.maxPagesPerQuery){input.maxPagesPerQuery=Math.max(1,Math.min(2,Number(props.maxPagesPerQuery.maximum)||2));}
+    if(props.resultsPerPage){input.resultsPerPage=Math.max(10,Math.min(20,Number(props.resultsPerPage.maximum)||20));}
+    const invalid=validateActorInput(schema,input);if(invalid)return json({error:invalid},400);
+    const response=await fetch("https://api.apify.com/v2/acts/"+LINKEDIN_RESEARCH_ACTOR.replace("/","~")+"/runs?waitForFinish=0",{method:"POST",headers:{Authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(input)});
+    const result=await response.json();if(!response.ok)return json({error:result.error?.message||"Apify Actor 启动失败（HTTP "+response.status+"）"},502);
+    const runId=result.data?.id;if(!runId)return json({error:"Apify 未返回任务 ID"},502);
+    await env.APIFY_CONFIG.put("linkedin_task:"+runId,JSON.stringify({runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,status:result.data.status||"READY",createdAt:new Date().toISOString(),query}));
+    return json({ok:true,runId,status:result.data.status,actorId:LINKEDIN_RESEARCH_ACTOR});
+   }catch(e){return json({error:e.message||"任务启动失败"},502)}
+  }
+  if(url.pathname==="/api/linkedin/tasks" && request.method==="GET"){
+   try{const listed=await env.APIFY_CONFIG.list({prefix:"linkedin_task:",limit:100}),tasks=[];for(const key of listed.keys||[]){const raw=await env.APIFY_CONFIG.get(key.name);if(raw){try{tasks.push(JSON.parse(raw))}catch{}}}tasks.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));return json({tasks})}catch(e){return json({error:"读取 LinkedIn 相关任务失败："+e.message},502)}
+  }
+  if(url.pathname==="/api/linkedin/data" && request.method==="GET"){
+   try{const listed=await env.APIFY_CONFIG.list({prefix:"linkedin_data:",limit:100}),datasets=[];for(const key of listed.keys||[]){const raw=await env.APIFY_CONFIG.get(key.name);if(raw){try{datasets.push(JSON.parse(raw))}catch{}}}datasets.sort((a,b)=>String(b.collectedAt).localeCompare(String(a.collectedAt)));return json({datasets})}catch(e){return json({error:"读取 LinkedIn 相关数据失败："+e.message},502)}
+  }
+  if(url.pathname.startsWith("/api/linkedin/runs/") && request.method==="GET"){
+   const token=await env.APIFY_CONFIG.get("apify_token");if(!token)return json({error:"未配置 Apify Key"},401);
+   const runId=decodeURIComponent(url.pathname.slice("/api/linkedin/runs/".length));if(!/^[a-zA-Z0-9_-]{5,80}$/.test(runId))return json({error:"Run ID 无效"},400);
+   try{
+    const headers={Authorization:"Bearer "+token},response=await fetch("https://api.apify.com/v2/actor-runs/"+runId,{headers});const result=await response.json();if(!response.ok)return json({error:"读取任务状态失败（HTTP "+response.status+"）"},502);
+    const data=result.data||{},status=data.status;let items=[];
+    if(data.defaultDatasetId&&status==="SUCCEEDED"){const rows=await fetch("https://api.apify.com/v2/datasets/"+data.defaultDatasetId+"/items?limit=100&clean=true",{headers});if(rows.ok){const raw=await rows.json();items=(Array.isArray(raw)?raw:[]).filter(item=>{const u=String(item.url||item.link||item.displayedUrl||"");return !/(^|\/\/)([^/]+\.)?(linkedin\.com|lnkd\.in)(\/|$)/i.test(u)&&!/(linkedin\.com|lnkd\.in)/i.test(u)})}}
+    const taskKey="linkedin_task:"+runId,taskRaw=await env.APIFY_CONFIG.get(taskKey);
+    if(taskRaw){try{const task=JSON.parse(taskRaw);task.status=status;task.finishedAt=["SUCCEEDED","FAILED","ABORTED","TIMED-OUT"].includes(status)?new Date().toISOString():task.finishedAt;await env.APIFY_CONFIG.put(taskKey,JSON.stringify(task));if(status==="SUCCEEDED"){const dataKey="linkedin_data:"+runId,exists=await env.APIFY_CONFIG.get(dataKey);if(!exists){const archive={runId,type:"external_search",actorId:LINKEDIN_RESEARCH_ACTOR,query:task.query,collectedAt:new Date().toISOString(),itemCount:items.length,items};const encoded=JSON.stringify(archive);if(encoded.length<4500000)await env.APIFY_CONFIG.put(dataKey,encoded)}}}catch(e){}}
+    return json({runId,status,itemCount:items.length,items})
+   }catch(e){return json({error:"读取任务状态失败："+(e.message||"未知错误")},502)}
+  }
   if(url.pathname==="/api/facebook/schema" && request.method==="GET"){
    const type=url.searchParams.get("type")||"",config=facebookActorConfig(type),token=await env.APIFY_CONFIG.get("apify_token");
    if(!config)return json({error:"不支持的数据类型"},400);if(!token)return json({error:"请先保存 Apify API Key"},401);
